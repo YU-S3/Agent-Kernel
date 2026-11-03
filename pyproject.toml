@@ -25,4 +25,4 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 
 [tool.setuptools.package-data]
-agentlab_app = ["static/*", "catalog/**/*"]
+agentlab_app = ["static/*", "static/**/*", "catalog/**/*"]

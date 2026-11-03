@@ -27,6 +27,8 @@ For a benchmark, choose **任务来源 → SearchQA**, select an imported split,
 
 The dependency preview reflects the selected tools before execution. Actual execution events animate the graph; replay reads saved events without running plugins. Closing the page does not cancel a task. The server binds loopback and rejects cross-origin mutations.
 
+The answer pane renders Markdown and TeX in live output, saved answers and conversation history. Tool details are collapsed; **运行详情** opens the original envelope in the inspector. Rendering does not rewrite saved records. The pinned Markdown, sanitizer and math assets are shipped locally with their licenses and SHA256 manifest, so formatting needs no CDN connection.
+
 Offline examples remain available for reproducible conformance tests and never call a commercial provider. Their fixed answers are not model-quality results. See [the workbench guide](docs/workbench.md) for setup, connection troubleshooting and the distinction between model limits and runtime policies.
 
 ## Architecture

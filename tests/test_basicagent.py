@@ -223,7 +223,7 @@ def test_AG13_actual_browser_interactions(case):
         proof=json.loads(evidence.read_text())
         for name in ('run','pan','node_drag','zoom','fit','manual_camera_preserved','dynamic_spawn','replay','approval','mobile','console_clean'):
             assert proof['checks'][name] is True,name
-        assert proof['frontend_digest']==digest({p.name:p.read_text() for p in (ROOT/'src/agentlab_app/static').iterdir() if p.is_file()})
+        assert proof['frontend_digest']==digest({p.relative_to(ROOT/'src/agentlab_app/static').as_posix():__import__('hashlib').sha256(p.read_bytes()).hexdigest() for p in (ROOT/'src/agentlab_app/static').rglob('*') if p.is_file()})
         case.evidence.update(proof)
     run_case(case,test)
 
