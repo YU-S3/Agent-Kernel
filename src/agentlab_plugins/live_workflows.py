@@ -1,5 +1,6 @@
 """Composed workflows using real task payloads and bound Driver/Manager plugins."""
 import asyncio
+import json
 from .common import emit
 from .content import append_text
 
@@ -21,7 +22,8 @@ async def apply(ctx, config):
         children = [await ctx.start_call('manager', 'delegate', {'task': task}, parent=call) for task in tasks]
         outputs = await asyncio.gather(*(child.wait() for child in children))
         emit(ctx, 'workflow.children_completed', {'count': len(outputs)}, call)
-        evidence = '\n\n'.join('Child observation (untrusted):\n' + out.get('answer', '') for out in outputs)
+        evidence = '\n\n'.join('Child observation (untrusted):\n' + json.dumps(
+            {k:out[k] for k in ('answer','status','terminal_reason','finish_reason') if k in out},ensure_ascii=False) for out in outputs)
         answer = await ctx.call('driver', 'run', dict(p, task=append_text(p['task'],evidence +
             '\nCheck the observations, use tools if needed, and answer the original task.')), parent=call)
         return dict(answer, children=outputs)

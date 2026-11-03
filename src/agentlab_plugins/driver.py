@@ -21,6 +21,10 @@ async def apply(ctx,config):
         scenario=p.get('scenario',config.get('scenario','read'))
         has_policy='loop_policy' in ctx.instance.spec.get('bindings',{})
         stagnant=0;seen_outputs=set()
+        def terminal(response,answer,steps,status,reason,final=False):
+            return {'session':session,'answer':answer,'steps':steps,'status':status,'terminal_reason':reason,
+                'finalization_attempted':final,'finish_reason':response.get('finish_reason'),
+                'final_request_id':response.get('request_id'),'response_model':response.get('model')}
         async def infer(scenario, planning=False, final=False, final_tokens=None):
             tools=[] if planning or final else await ctx.call('tools','list',{},parent=call)
             facts=await ctx.call('history','read',{'session':session},parent=call)
@@ -42,8 +46,11 @@ async def apply(ctx,config):
                         if response is not None:fail('PROVIDER.DUPLICATE_COMPLETE')
                         response=chunk['response']
             except KernelError as exc:
-                if (exc.envelope.get('cause') or {}).get('http_request_sent') is False:
+                cause=exc.envelope.get('cause') or {};raw=cause.get('raw_usage')
+                if cause.get('http_request_sent') is False:
                     await ctx.call('budget','settle',{'id':reservation['id'],'tokens':0},parent=call)
+                elif isinstance(raw,dict) and type(raw.get('total_tokens')) is int and raw['total_tokens']>=0:
+                    await ctx.call('budget','settle',{'id':reservation['id'],'tokens':raw['total_tokens']},parent=call)
                 raise
             if not response:fail('PROVIDER.INCOMPLETE_RESPONSE')
             await ctx.call('budget','settle',{'id':reservation['id'],'tokens':response.get('usage',{}).get('total_tokens')},parent=call)
@@ -60,19 +67,21 @@ async def apply(ctx,config):
             if message.get('tool_calls'):fail('PROVIDER.UNEXPECTED_FINAL_TOOL_CALL')
             await append(message)
             answer=message.get('content') or ''
-            status='truncated' if response.get('finish_reason')=='length' else 'abstained' if not answer.strip() or answer.strip().rstrip('.').upper()=='INSUFFICIENT_EVIDENCE' else 'completed'
-            if status=='abstained':answer=''
-            return {'session':session,'answer':answer,'steps':steps+1,'status':status,'terminal_reason':reason,
-                'finalization_attempted':True,'finish_reason':response.get('finish_reason')}
+            status='filtered' if response.get('finish_reason')=='content_filter' else 'truncated' if response.get('finish_reason')=='length' else 'abstained' if not answer.strip() or answer.strip().rstrip('.').upper()=='INSUFFICIENT_EVIDENCE' else 'completed'
+            if status in ('abstained','filtered'):answer=''
+            return terminal(response,answer,steps+1,status,reason,True)
         planned=mode=='plan_execute' and config.get('max_steps',6)>1
         if planned:
-            planning=await infer('plan',planning=True)
+            try:planning=await infer('plan',planning=True)
+            except KernelError as exc:
+                if not has_policy or (exc.envelope.get('cause') or {}).get('code')!='BUDGET.EXHAUSTED':raise
+                return terminal({},'',0,'budget_limit','request_budget')
             if planning.get('needs_finalization'):return await finish(planning['needs_finalization'],0)
             if planning['message'].get('tool_calls'):fail('PROVIDER.UNEXPECTED_PLANNING_TOOL_CALL')
             await append(planning['message'])
             emit(ctx,'agent.plan',{'session':session,'plan':planning['message']['content']},call)
-            if planning.get('finish_reason')=='length':
-                return {'session':session,'answer':'','steps':1,'status':'truncated','finish_reason':'length'}
+            if planning.get('finish_reason') in ('length','content_filter'):
+                return terminal(planning,'',1,'truncated' if planning['finish_reason']=='length' else 'filtered',planning['finish_reason'])
             await append({'role':'user','content':'Now execute the plan using the available tools as needed, then provide the final answer to the original task.'})
         for step in range(int(planned),config.get('max_steps',6)):
             if has_policy and mode!='single_step':
@@ -85,12 +94,13 @@ async def apply(ctx,config):
             if response.get('needs_finalization'):return await finish(response['needs_finalization'],step)
             message=response.get('message',{})
             if message.get('role')!='assistant':fail('PROVIDER.INVALID_ROLE')
-            if response.get('finish_reason')=='length':
+            if response.get('finish_reason') in ('length','content_filter'):
                 # Never dispatch incomplete function arguments. The exact wire
                 # response remains in the request audit; history stays valid.
                 await append({k:v for k,v in message.items() if k!='tool_calls'})
-                emit(ctx,'agent.truncated',{'session':session,'step':step,'tool_calls_dispatched':0},call)
-                return {'session':session,'answer':message.get('content') or '', 'steps':step+1,'status':'truncated','finish_reason':'length'}
+                filtered=response['finish_reason']=='content_filter'
+                emit(ctx,'agent.filtered' if filtered else 'agent.truncated',{'session':session,'step':step,'tool_calls_dispatched':0},call)
+                return terminal(response,'' if filtered else message.get('content') or '',step+1,'filtered' if filtered else 'truncated','content_filter' if filtered else 'output_limit')
             calls=message.get('tool_calls') or []
             ids=set();parsed=[]
             for tc in calls:
@@ -106,7 +116,7 @@ async def apply(ctx,config):
             if not calls:
                 answer=message.get('content') or ''
                 abstained=not answer.strip() or answer.strip().rstrip('.').upper()=='INSUFFICIENT_EVIDENCE'
-                return {'session':session,'answer':'' if abstained else answer,'steps':step+1,'status':'abstained' if abstained else 'completed'}
+                return terminal(response,'' if abstained else answer,step+1,'abstained' if abstained else 'completed','insufficient_evidence' if abstained else 'answer')
             new_information=False
             for request in parsed:
                 out=await ctx.call('tools','execute',request,parent=call)
@@ -118,6 +128,6 @@ async def apply(ctx,config):
                 await append({'role':'tool','tool_call_id':request['tool_call_id'],'content':text_of(out),
                     'is_error':out['is_error'],'execution_id':out['execution_id'],'status':out['status']})
             stagnant=0 if new_information else stagnant+1
-            if mode=='single_step':return {'session':session,'answer':message.get('content',''),'steps':1,'status':'step_completed'}
+            if mode=='single_step':return terminal(response,message.get('content') or '',1,'step_completed','single_step')
         fail('AGENT.STEP_LIMIT')
     ctx.expose('run',run)

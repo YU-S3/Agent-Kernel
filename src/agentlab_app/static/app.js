@@ -133,6 +133,7 @@ function renderBenchmark(b){
  const pct=x=>x==null?'—':(100*x).toFixed(1)+'%';
  const correct=b.correct??(b.tasks||[]).reduce((n,r)=>n+(r.em||0),0), all=b.finished?correct/b.finished:null;
  $('benchmarkStats').textContent=`EM ${pct(b.em)} / F1 ${pct(b.f1)}（${b.scored||0} 题已评分）· 含错误题正确率 ${pct(all)}（${correct}/${b.finished||0} 已结束题） · 接口/执行错误 ${b.errors||0} · ${b.tokens||0} tokens · ${b.requests||0} 次请求 · 未知用量 ${b.unknown_requests||0}${b.current?' · 当前第 '+b.current.index+' 题':''}${b.pause_requested?' · 等待当前题结束后暂停':''}`;
+ $('benchmarkStats').textContent+=` · 评分版本：${b.evaluation?.version||'旧记录（以原 selection 为准）'}`;
  $('benchmarkRows').replaceChildren();
  for(const r of [...(b.tasks||[]),...(b.current?[{...b.current,status:'running'}]:[])]){
   const tr=document.createElement('tr');for(const value of [`${r.index} · ${r.id}`,r.status+(r.terminal_reason?' · '+r.terminal_reason:''),r.em==null?'—':`${pct(r.em)} / ${pct(r.f1)}`,r.tokens==null?'—':`${r.tokens} / ${r.requests}`,r.elapsed_seconds==null?'—':r.elapsed_seconds+'s',r.answer??r.error?.cause?.code??r.error?.code??'处理中']){const td=document.createElement('td');td.textContent=value;tr.append(td)}

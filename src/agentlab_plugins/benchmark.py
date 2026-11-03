@@ -15,11 +15,15 @@ async def apply(ctx, config):
     checkpoint = path/'progress.json'
     state = json.loads(checkpoint.read_text()) if checkpoint.exists() else {
         'total': len(selection['ids']), 'tasks': [], 'status':'ready', 'current':None,
-        'selection_sha256': selection['selection_sha256']}
+        'selection_sha256': selection['selection_sha256'], 'evaluation':selection.get('evaluation',{'version':selection.get('dataset',{}).get('scorer')})}
+    import hashlib
+    frozen={k:v for k,v in selection.items() if k!='selection_sha256'}
+    if hashlib.sha256(json.dumps(frozen,sort_keys=True).encode()).hexdigest()!=selection['selection_sha256']:
+        raise ValueError('Benchmark selection digest mismatch')
     if state['selection_sha256'] != selection['selection_sha256']: raise ValueError('Benchmark selection changed')
     paused = False
     def save():
-        done = [r for r in state['tasks'] if r['status'] in ('completed','truncated','step_completed','abstained','context_limit','budget_limit')]
+        done = [r for r in state['tasks'] if r['status'] in ('completed','truncated','step_completed','abstained','context_limit','budget_limit','filtered')]
         state.update(finished=len(state['tasks']), scored=len(done), errors=sum(r['status']=='error' for r in state['tasks']),
             correct=sum(r.get('em',0) for r in done),
             em_all_completed=sum(r.get('em',0) for r in done)/len(state['tasks']) if state['tasks'] else None,

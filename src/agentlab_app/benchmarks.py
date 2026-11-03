@@ -149,6 +149,8 @@ class DatasetCatalog:
             gold = json.loads((source/'gold.json').read_text(encoding='utf-8'))
         private = {row['id']: gold[row['id']] for row in public}
         selected = {'dataset': manifest, 'start': start, 'count': count, 'ids': [r['id'] for r in public]}
+        from agentlab_plugins.searchqa_scoring import contract, SURFACE
+        selected['evaluation'] = contract(spec.get('scorer', SURFACE))
         selected['selection_sha256'] = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()
         write_json(root/'benchmark/public.json', public); write_json(root/'benchmark/gold.json', private)
         write_json(root/'benchmark/selection.json', selected)

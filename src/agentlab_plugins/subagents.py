@@ -30,7 +30,8 @@ async def apply(ctx,config):
         active[ident]=(row,execution)
         emit(ctx,'subagent.started',row,call)
         try:
-            out=await execution.wait();row['status']='completed'
+            out=await execution.wait();row['status']=out.get('status','completed')
+            row.update({k:out[k] for k in ('terminal_reason','finish_reason') if k in out})
             return dict(out,instance=handle.instance_id,delegation_id=ident)
         finally:
             if not execution.done.is_set():execution.cancel();await asyncio.gather(execution.wait(),return_exceptions=True)

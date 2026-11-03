@@ -18,7 +18,8 @@ async def compute_apply(ctx,config):
     async def execute(p,c):
         emit(ctx,'provider.executed',{'name':kind},c)
         data=await ctx.call('sandbox','run',{'kind':kind,'code':p['arguments']['code']},parent=c)
-        return result(data['stdout'],is_error=data['exit_code']!=0,**data)
+        visible={k:data[k] for k in ('stdout','stderr','exit_code','status','artifacts','stdout_bytes','stderr_bytes','oom_killed') if k in data}
+        return result(json.dumps(visible,ensure_ascii=False),is_error=data['exit_code']!=0,**data)
     ctx.expose('describe',describe);ctx.expose('execute',execute)
 
 
@@ -53,7 +54,9 @@ async def delegate_apply(ctx,config):
         {'task':{'type':'string'},'tools':{'type':'array','items':{'type':'string'}},'delay':{'type':'number','minimum':0,'maximum':10}},['task']),timeout_ms=config.get('timeout_ms',10000))]
     async def execute(p,c):
         out=await ctx.call('manager','delegate',p['arguments'],parent=c)
-        return result(out['answer'],child_session=out['session'],child_instance=out['instance'])
+        visible={k:out[k] for k in ('answer','status','terminal_reason','finish_reason') if k in out}
+        return result(json.dumps(visible,ensure_ascii=False),is_error=out.get('status') not in ('completed','step_completed'),
+                      child_session=out['session'],child_instance=out['instance'],child_status=out.get('status'))
     ctx.expose('describe',describe);ctx.expose('execute',execute)
 
 

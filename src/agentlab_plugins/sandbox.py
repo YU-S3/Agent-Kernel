@@ -16,12 +16,13 @@ async def apply(ctx, config):
     image=config.get('image',IMAGE)
     if '@sha256:' not in image: fail('SANDBOX.UNPINNED_IMAGE')
     async def command(*args):
-        proc=await asyncio.create_subprocess_exec('docker',*args,cwd='/',stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+        try:proc=await asyncio.create_subprocess_exec('docker',*args,cwd='/',stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+        except OSError:raise KernelError('CONTROL.SANDBOX_UNAVAILABLE','Docker executable unavailable',outcome_known=True) from None
         out,err=await proc.communicate()
         return proc.returncode,out.decode(errors='replace'),err.decode(errors='replace')
     async def remove(name):
         try: await asyncio.wait_for(command('rm','-f',name),10)
-        except asyncio.TimeoutError: pass
+        except (asyncio.TimeoutError,KernelError): pass
 
     async def run(p,call):
         kind=p.get('kind')
@@ -79,12 +80,17 @@ async def apply(ctx, config):
                 row['artifacts']=artifacts
         except asyncio.CancelledError:
             row['status']='cancelled';raise
+        except KernelError as exc:
+            row.setdefault('status','failed');row['error']=exc.envelope;raise
         finally:
             await remove(name)
             if proc and proc.returncode is None: proc.kill();await proc.wait()
             running.pop(call.execution_id,None)
-            code,_,_=await command('inspect',name)
-            row['cleanup']=code!=0
+            try:
+                code,_,_=await command('inspect',name)
+                row['cleanup']=code!=0
+            except KernelError:
+                row['cleanup']=False;row['cleanup_error']='SANDBOX_UNAVAILABLE'
             receipts.append(row)
             emit(ctx,'sandbox.receipt',row,call)
         return dict(row)

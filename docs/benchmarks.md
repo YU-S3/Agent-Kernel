@@ -38,6 +38,13 @@ Progress reports `scored`, `errors`, `correct`, and both denominators: EM/F1 ove
 
 ## Add another benchmark
 
+New selections now record `evaluation.version=searchqa.surface-alias.v2` and
+its contract hash. This local scorer handles typography and explicit gold
+alternatives conservatively; it does not infer synonyms. Both local and legacy
+scores are recorded. Old selections keep `normalized-em-token-f1.v1` unchanged.
+Set `options.benchmark.scorer` to that legacy ID when starting a comparison
+that requires the old rule. See [the exact policy](basic-plugin-contracts.md).
+
 Register an adapter and its tools as normal PluginDefinitions. Bind the adapter's public tools through `tools.registry`, its lifecycle/scorer to `benchmark.runner`, and the runner to the chosen Agent. Never expose gold through a model-accessible tool or prompt. Add its catalog loader and UI metadata in the application layer; no Kernel scheduler or graph renderer changes are required. Freeze data/selection identity and add tests for native tools, scoring, cancellation, independent episodes and accounting before enabling it.
 
 ## Evidence and source identity

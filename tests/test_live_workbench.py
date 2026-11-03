@@ -99,7 +99,7 @@ def test_loading_snapshot_and_missing_key_do_not_blank_graph(tmp_path,monkeypatc
     asyncio.run(run())
 
 
-def test_truncated_tool_stream_is_not_executed_and_unknown_is_not_retried(tmp_path):
+def test_truncated_tool_stream_never_executes_and_known_usage_is_not_lost(tmp_path):
     from agentlab_app.distribution import load
     from agentlab.abi import KernelError
     import pytest
@@ -128,7 +128,9 @@ def test_truncated_tool_stream_is_not_executed_and_unknown_is_not_retried(tmp_pa
                 await h.run(payload={'task':'Incomplete transport test','session':'main'})
             assert len(sent)==2
             usage=await h.invoke('budget','remaining',{}).wait()
-            assert usage['used']==20000 and usage['unknown_requests']==1
+            # Both responses carry a valid final usage chunk. A missing [DONE]
+            # keeps the second execution failed, but its usage is still known.
+            assert usage['used']==40000 and usage['unknown_requests']==0
             rows=[json.loads(p.read_text()) for p in (tmp_path/'run/requests').glob('*.json')]
             assert len(rows)==2 and any(r['receipt']['error']=='PROVIDER.INCOMPLETE_RESPONSE' for r in rows)
             assert all(not m.get('tool_calls') for m in sent[1]['messages'])

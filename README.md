@@ -31,6 +31,11 @@ Offline examples remain available for reproducible conformance tests and never c
 
 ## Architecture
 
+See [Basic plugin contracts](docs/basic-plugin-contracts.md) for evidence
+novelty, tool/child failure propagation, exact versus unknown usage, and
+versioned local SearchQA scoring. New selections freeze their scorer;
+historical results are never silently re-scored.
+
 ```mermaid
 flowchart TB
     C[Composition: definitions, instances, bindings, grants] --> K

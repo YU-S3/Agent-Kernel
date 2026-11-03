@@ -185,13 +185,14 @@ def build_live(root,connection,options=None,profile='live'):
         entry={'instance':'workflow','method':'run'}
     if profile=='live-mcp':
         instances.setdefault('workspace',spec('workspace.local',{'root':str(workspace)}))
+        instances['workspace']['config']['read_permissions']=['tool:read_file','tool:mcp_read_file']
         instances['mcp_server']=spec('mcp.workspace',{}, {'workspace':'workspace'})
         instances['mcp']=spec('tools.mcp',{}, {'server':'mcp_server'})
         instances['tools']['bindings']['mcp']='mcp'
         instances['tools']['config']['providers'].append('mcp');instances['tools']['config']['static'].append('mcp')
     if benchmark:
         directory=root/'benchmark'
-        instances['adapter']=spec('benchmark.searchqa',{'public_path':str(directory/'public.json'),'gold_path':str(directory/'gold.json')})
+        instances['adapter']=spec('benchmark.searchqa',{'public_path':str(directory/'public.json'),'gold_path':str(directory/'gold.json'),'selection_path':str(directory/'selection.json')})
         instances['evidence']=spec('tool.searchqa',{}, {'adapter':'adapter'})
         instances['tools']['bindings']['evidence']='evidence'
         instances['tools']['config']['providers'].append('evidence');instances['tools']['config']['static'].append('evidence')
