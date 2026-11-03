@@ -9,8 +9,9 @@ async def apply(ctx,config):
         auth=ctx.authority(call)
         depth=sum(c['instance'].startswith(ctx.instance_id+'-') for c in auth['chain'])
         if depth>=config.get('max_depth',2):fail('SUBAGENT.DEPTH_LIMIT')
-        root=auth['chain'][-1]['execution']
-        if root not in counts:ctx.scope_cleanup(auth['chain'][-1]['scope'],lambda:counts.pop(root,None),parent=call)
+        scope_owner=next((c for c in reversed(auth['chain']) if c['instance'] in config.get('limit_scope_instances',[])),auth['chain'][-1])
+        root=scope_owner['execution']
+        if root not in counts:ctx.scope_cleanup(scope_owner['scope'],lambda:counts.pop(root,None),parent=call)
         counts[root]=counts.get(root,0)+1
         if counts[root]>config.get('max_children',4):fail('SUBAGENT.COUNT_LIMIT')
         granted=set(auth['permissions'])
@@ -19,7 +20,8 @@ async def apply(ctx,config):
         permissions=sorted((granted-{x for x in granted if x.startswith('tool:')})|{'tool:'+t for t in tools})
         permissions=[x for x in permissions if x!='tools:manage']
         bindings={name:ctx.instance.spec['bindings'][name] for name in ('model','tools','history','context','budget')}
-        handle=await ctx.spawn_instance('child',bindings,{'max_steps':config.get('child_max_steps',4),'reservation_tokens':config.get('reservation_tokens',128)},parent=call,control={'permissions':permissions})
+        if 'loop_policy' in ctx.instance.spec['bindings']:bindings['loop_policy']=ctx.instance.spec['bindings']['loop_policy']
+        handle=await ctx.spawn_instance('child',bindings,{**config.get('child_config',{}),'max_steps':config.get('child_max_steps',4),'reservation_tokens':config.get('reservation_tokens',128)},parent=call,control={'permissions':permissions})
         session='child-'+uuid.uuid4().hex
         execution=await ctx.start_call(handle,'run',{'task':p['task'],'session':session,'scenario':p.get('scenario','read'),
                                       'delay':p.get('delay',.01)},parent=call)

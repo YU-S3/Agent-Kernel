@@ -2,7 +2,9 @@
 import hashlib
 import json
 import zipfile
+import re
 from pathlib import Path
+NORMALIZATION='searchqa.public-input.v2'
 
 
 def write_json(path, data):
@@ -50,8 +52,18 @@ def normalize_searchqa(data):
             text = snippet.get('text', snippet.get('snippet'))
             if text is None:text=''  # upstream contains null snippets; preserve their title/URL and the task
             if not isinstance(text, str): raise ValueError(f'{ident} snippet {i} 不是文本')
-            clean.append({'id': str(i+1), 'text': text, 'title': str(snippet.get('title', '')), 'url': str(snippet.get('url', ''))})
-        public.append({'id': ident, 'question': question, 'snippets': clean})
+            clean.append({'id': str(i+1), 'text': text, 'title': str(snippet.get('title') or ''), 'url': str(snippet.get('url') or ''),
+                'related_links':snippet.get('related_links') or []})
+        metadata={k:row[k] for k in ('category','air_date','value','round','show_number') if isinstance(row.get(k),(str,int,float))}
+        images=row.get('images') or []
+        if not isinstance(images,list):raise ValueError(f'{ident} images 必须为图片 URL 或 image_url 内容块的数组')
+        if images:
+            from agentlab_plugins.content import task_content
+            images=task_content([{'type':'image_url','image_url':{'url':u}} if isinstance(u,str) else u for u in images],True)
+            if any(i['type']!='image_url' for i in images):raise ValueError(f'{ident} images 只能包含图片')
+        referenced=bool(re.search(r'\b(seen here|shown here|pictured|in this (picture|photo|image))\b',question,re.I))
+        public.append({'id': ident, 'question': question, 'snippets': clean,'metadata':metadata,'images':images,
+            'media':{'referenced':referenced,'provided_count':len(images),'missing_referenced_media':referenced and not images}})
         private[ident] = answers
     return public, private
 
@@ -68,14 +80,14 @@ class DatasetCatalog:
             try: data = [json.loads(line) for line in text.splitlines() if line.strip()]
             except json.JSONDecodeError as exc: raise ValueError('无效 JSON / JSONL') from exc
         public, private = normalize_searchqa(data)
-        digest = hashlib.sha256(raw).hexdigest(); ident = digest[:24]
+        digest = hashlib.sha256(raw).hexdigest(); ident = hashlib.sha256((digest+NORMALIZATION).encode()).hexdigest()[:24]
         path = self.root / ident
         if not path.exists():
             path.mkdir()
             write_json(path/'public.json', public); write_json(path/'gold.json', private)
             write_json(path/'manifest.json', {'id': ident, 'adapter': 'searchqa', 'name': str(name)[:160],
                 'split': str(split)[:40], 'count': len(public), 'sha256': digest,
-                'scorer': 'normalized-em-token-f1.v1', 'origin': 'user-import'})
+                'scorer': 'normalized-em-token-f1.v1', 'origin': 'user-import','normalization':NORMALIZATION})
         return self.get(ident)
 
     def get(self, ident):
@@ -96,8 +108,8 @@ class DatasetCatalog:
             for block in iter(lambda:stream.read(1024*1024),b''):checksum.update(block)
         digest=checksum.hexdigest()
         if digest!=expected_sha256:raise ValueError('SearchQA archive SHA256 mismatch')
-        ident=digest[:24]; path=self.root/ident
-        if (path/'manifest.json').exists() and self.get(ident).get('normalization')=='searchqa.nullable-snippets.v1':return self.get(ident)
+        ident=hashlib.sha256((digest+NORMALIZATION).encode()).hexdigest()[:24]; path=self.root/ident
+        if (path/'manifest.json').exists() and self.get(ident).get('normalization')==NORMALIZATION:return self.get(ident)
         path.mkdir(exist_ok=True);index=[];seen=set();skipped=[]
         with zipfile.ZipFile(archive) as bundle, (path/'public.jsonl').open('wb') as public, (path/'gold.jsonl').open('wb') as private:
             for member in sorted(bundle.namelist()):
@@ -116,7 +128,7 @@ class DatasetCatalog:
         write_json(path/'manifest.json',{'id':ident,'adapter':'searchqa','name':'SearchQA upstream','split':split,
             'count':len(index),'sha256':digest,'scorer':'normalized-em-token-f1.v1','origin':source_url,
             'order':'sorted upstream member paths','skipped_count':len(skipped),'storage':'indexed-jsonl'})
-        manifest=self.get(ident);manifest['normalization']='searchqa.nullable-snippets.v1'
+        manifest=self.get(ident);manifest['normalization']=NORMALIZATION
         write_json(path/'manifest.json',manifest)
         return self.get(ident)
 

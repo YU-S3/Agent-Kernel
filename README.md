@@ -106,7 +106,7 @@ History is append-only; Context builds a projection. A session has a scoped leas
 
 Live sessions use an accounting plugin: actual returned usage, request counts, pending requests and unknown usage are recorded separately. There is no default cumulative token cap. Optional request limits and Agent step limits are runtime policy, not model connection fields. `max_tokens` is an optional **per-response** limit; leaving it empty uses the API default. The strict reservation budget remains a separate plugin for controlled fixtures, with no claim of a guaranteed commercial-provider token cap.
 
-Context and History are separate plugins. The current live context projection retains the system messages and recent whole turns, preserving assistant/tool pairing and the full append-only history on disk. It does not yet implement model-generated semantic summaries. A single turn that cannot fit the configured projection is reported explicitly; input is not silently cut.
+Context and History are separate plugins. The current live context projection retains the system messages and recent whole turns, preserving assistant/tool pairing and the full append-only history on disk. It does not yet implement model-generated semantic summaries. Long or repeated tool results are excerpted/deduplicated only in the sending projection. Original facts and normal tool-round reasoning remain intact. The optional `agent.policy.basic` binding triggers at most one tool-free, bounded final answer on stagnation, capacity pressure or the step boundary. Required input that still cannot fit returns an explicit controlled terminal state; task text and images are never silently removed.
 
 ## License
 

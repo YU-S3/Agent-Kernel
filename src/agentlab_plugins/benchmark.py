@@ -19,8 +19,10 @@ async def apply(ctx, config):
     if state['selection_sha256'] != selection['selection_sha256']: raise ValueError('Benchmark selection changed')
     paused = False
     def save():
-        done = [r for r in state['tasks'] if r['status'] in ('completed','truncated','step_completed')]
+        done = [r for r in state['tasks'] if r['status'] in ('completed','truncated','step_completed','abstained','context_limit','budget_limit')]
         state.update(finished=len(state['tasks']), scored=len(done), errors=sum(r['status']=='error' for r in state['tasks']),
+            correct=sum(r.get('em',0) for r in done),
+            em_all_completed=sum(r.get('em',0) for r in done)/len(state['tasks']) if state['tasks'] else None,
             em=sum(r.get('em',0) for r in done)/len(done) if done else None,
             f1=sum(r.get('f1',0) for r in done)/len(done) if done else None,
             tokens=sum(r.get('tokens',0) for r in state['tasks']),
@@ -52,6 +54,7 @@ async def apply(ctx, config):
                 state['current']=row; save(); emit(ctx,'benchmark.task_started',row,c)
                 try:
                     task=await ctx.call('adapter','open',{'id':ident},parent=c)
+                    row.update(metadata=task.get('metadata',{}),media=task.get('media',{}))
                     response=await ctx.call('agent','run',{'task':task['task'],'session':row['session']},parent=c)
                     score=await ctx.call('adapter','score',{'answer':response.get('answer','')},parent=c)
                     row.update(response,**score)
@@ -65,9 +68,11 @@ async def apply(ctx, config):
                 row.pop('usage_before',None)
                 await ctx.call('adapter','close',{},parent=c)
                 state['tasks'].append(row); state['current']=None; save(); emit(ctx,'benchmark.task_completed',row,c)
+                if row.get('status')=='budget_limit':
+                    state['status']='paused';break
                 if row.get('error') and (row['error'].get('cause') or {}).get('code','').startswith('BUDGET.'):
                     state['status']='paused'; break
-            else: state['status']='completed'
+            else: state['status']='completed_with_errors' if state.get('errors') else 'completed'
             save(); emit(ctx,'benchmark.completed',{'status':state['status'],'finished':state['finished'],'total':state['total']},c)
             return dict(state)
         except BaseException:

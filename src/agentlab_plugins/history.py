@@ -76,6 +76,11 @@ async def history_apply(ctx, config):
 async def context_apply(ctx, config):
     async def build(p, call):
         messages = deepcopy(p['messages'])
+        if config.get('compact_tools'):
+            from .context_projection import project
+            out=project(messages,config,p.get('final',False),p.get('protected_from'))
+            if out['projected']:emit(ctx,'context.projected',{k:v for k,v in out.items() if k!='messages'},call)
+            return out
         if config.get('mode') == 'window':
             # Project whole turns; never cut assistant/tool pairs in half.
             starts = [i for i,m in enumerate(messages) if m['role'] == 'user']

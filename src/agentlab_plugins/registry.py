@@ -77,7 +77,8 @@ async def apply(ctx, config):
             # The admitted definition is immutable even if a concurrent unregister occurs.
             try:
                 async def dispatch():
-                    return await ctx.call(row['provider'],'execute',{'name':row['provider_name'],'arguments':p.get('arguments',{})},parent=call)
+                    return await ctx.call(row['provider'],'execute',{'name':row['provider_name'],'arguments':p.get('arguments',{}),
+                        '_consumer':ctx.authority(call)['chain'][1]['execution'] if len(ctx.authority(call)['chain'])>1 else call.execution_id},parent=call)
                 async def bounded():
                     try:return await asyncio.wait_for(dispatch(),definition['timeout_ms']/1000)
                     except asyncio.TimeoutError:raise KernelError('EXECUTION.TIMEOUT','Tool deadline',outcome_known=False) from None
@@ -87,7 +88,9 @@ async def apply(ctx, config):
                 check(definition['output_schema'],out,'TOOL.INVALID_OUTPUT')
                 check({'type':'array','items':{'type':'object','required':['type','text'],'properties':{'type':{'const':'text'},'text':{'type':'string'}}}},out.get('content'),'TOOL.INVALID_OUTPUT')
                 out = deepcopy(out)
-                for content in out['content']: content['text'] = content['text'][:config.get('max_output_chars',8192)]
+                from .context_projection import compact_text
+                if not config.get('retain_full_outputs'):
+                    for content in out['content']:content['text']=compact_text(content['text'],config.get('max_output_chars',8192))
                 out.update(base,status='error' if out.get('is_error') else 'completed')
             except PluginOperationError as exc:
                 out = dict(result(exc.envelope['cause']['code'],is_error=True),status='error',**base)

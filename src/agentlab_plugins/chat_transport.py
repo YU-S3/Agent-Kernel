@@ -28,8 +28,15 @@ async def apply(ctx,config):
         if not key and config.get('env_file'):key=read_env(config['env_file']).get(config['api_key_env'])
         if not key:fail('PROVIDER.KEY_MISSING')
         messages=[{k:v for k,v in m.items() if k in ('role','content','tool_calls','tool_call_id','name','reasoning_content')} for m in p['messages']]
+        from .content import task_content
+        for message in messages:
+            if isinstance(message.get('content'),list):task_content(message['content'],config.get('supports_images',False))
         payload={'model':config['model'],'messages':messages,'stream':config.get('stream',False)}
         if config.get('max_tokens') is not None:payload['max_tokens']=config['max_tokens']
+        if p.get('purpose')=='finalization':
+            cap=p.get('max_completion_tokens')
+            if type(cap) is not int or not 1<=cap<=8192:fail('PROVIDER.INVALID_FINAL_LIMIT')
+            payload['max_tokens']=min(cap,payload.get('max_tokens',cap))
         if config.get('thinking') in ('enabled','disabled'):payload['thinking']={'type':config['thinking']}
         if config.get('reasoning_effort') in ('low','high','max'):payload['reasoning_effort']=config['reasoning_effort']
         if payload['stream']:payload['stream_options']={'include_usage':True}

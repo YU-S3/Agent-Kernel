@@ -63,7 +63,7 @@ class Application:
             self.persist(row)
             async for chunk in ex.stream():pass  # observations are already independently recorded
             result=await ex.wait();status=result.get('status') if isinstance(result,dict) else None
-            row.update(result=result,status=status if status in ('truncated','paused','interrupted','step_completed') else 'completed',error=None)
+            row.update(result=result,status=status if status in ('truncated','paused','interrupted','step_completed','abstained','context_limit','budget_limit','completed_with_errors') else 'completed',error=None)
         except asyncio.CancelledError:
             row.update(status='cancelled',error={'code':'EXECUTION.CANCELLED','outcome_known':False})
         except KernelError as exc:
@@ -156,7 +156,9 @@ class Application:
             row=self.runs.get(request.match_info['id'])
             if not row:raise web.HTTPNotFound()
             return row
-        async def runs(request):return web.json_response([{'id':r['id'],'profile':r['profile'],'status':r['status']} for r in self.runs.values()])
+        def display_status(row):
+            return 'completed_with_errors' if row['status']=='completed' and isinstance(row.get('result'),dict) and row['result'].get('errors',0) else row['status']
+        async def runs(request):return web.json_response([{'id':r['id'],'profile':r['profile'],'status':display_status(r)} for r in self.runs.values()])
         async def state(request):
             row=get(request);host=row.get('host')
             view=snapshot(host) if host else row.get('snapshot',{'instances':{},'executions':{}})
@@ -164,7 +166,8 @@ class Application:
             bench=json.loads(progress.read_text()) if progress.exists() else None
             if bench is None and selection.exists():
                 sel=json.loads(selection.read_text());bench={'status':'loading','finished':0,'total':sel['count'],'tasks':[]}
-            return web.json_response(dict(view,run_id=row['id'],run_status=row['status'],result=row.get('result'),error=row.get('error'),benchmark=bench,
+            if bench and bench.get('status')=='completed' and bench.get('errors'):bench=dict(bench,status='completed_with_errors',recorded_status='completed')
+            return web.json_response(dict(view,run_id=row['id'],run_status=display_status(row),result=row.get('result'),error=row.get('error'),benchmark=bench,
                 actions={'history':'history' in row.get('names',{}) or row['profile'] in LIVE_PROFILES,'approval':'policy' in row.get('names',{}),
                     'continue':(bool(host) or row['profile'] in LIVE_PROFILES) and (not bench or row['status'] in ('paused','interrupted','failed','cancelled')),
                     'pause':bool(bench) and row['status']=='running'}))
@@ -186,7 +189,7 @@ class Application:
         async def continuation(request):
             row=get(request)
             if row['status'] in ('loading','running') or (not row.get('host') and row['profile'] not in LIVE_PROFILES):raise web.HTTPConflict(text='Host not idle or fixture cannot be restored')
-            if (row['path']/'benchmark/selection.json').exists() and row['status']=='completed':raise web.HTTPConflict(text='已完成的 benchmark 不会重复运行；请新建实验')
+            if (row['path']/'benchmark/selection.json').exists() and row['status'] in ('completed','completed_with_errors'):raise web.HTTPConflict(text='已完成的 benchmark 不会重复运行；请新建实验')
             body=await request.json();row.update(status='loading',result=None,error=None)
             self.persist(row)
             row['task']=asyncio.create_task(self.execute(row,{k:v for k,v in body.items() if k in ('task','session')}))

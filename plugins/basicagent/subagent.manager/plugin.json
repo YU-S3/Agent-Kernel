@@ -38,5 +38,10 @@
   "python_dependencies": [
     "agentlab_plugins",
     "agentlab_app"
-  ]
+  ],
+  "optional_requires": {
+    "loop_policy": [
+      "decide"
+    ]
+  }
 }

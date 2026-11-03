@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 DEFAULT = {'base_url':'https://api.deepseek.com','model':'deepseek-flash',
            'api_key_env':'DEEPSEEK_API_KEY','thinking':'enabled','reasoning_effort':'high',
-           'max_tokens':None,'timeout':600,'stream':True}
+           'max_tokens':None,'timeout':600,'stream':True,'supports_images':False}
 
 
 def read_env(path):
@@ -55,6 +55,7 @@ class ModelSettings:
         if c['max_tokens'] is not None and (type(c['max_tokens']) is not int or c['max_tokens']<1):raise ValueError('Invalid output limit')
         if type(c['timeout']) is not int or not 1<=c['timeout']<=3600:raise ValueError('Invalid timeout')
         if type(c['stream']) is not bool:raise ValueError('Invalid stream setting')
+        if type(c['supports_images']) is not bool:raise ValueError('Invalid image capability')
         self.home.mkdir(parents=True,exist_ok=True,mode=0o700)
         def write(path,value):
             temp=path.with_suffix('.tmp')
