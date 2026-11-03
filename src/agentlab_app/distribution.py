@@ -9,6 +9,13 @@ ROOT=Path(__file__).resolve().parents[2]
 CATALOG=ROOT/'plugins' if (ROOT/'plugins/basicagent').is_dir() else Path(__file__).parent/'catalog'
 PROFILES=['viz-basic','viz-tool-sandbox','viz-subagent','viz-multi-agent','viz-memory','viz-dynamic-spawn',
           'viz-dynamic-tools','viz-external','viz-random-names','viz-approval','viz-mcp','viz-plan-execute','viz-single-step']
+LIVE_PROFILES={
+    'live':'Basic · 工具循环', 'live-single-step':'Basic · 单步执行',
+    'live-plan-execute':'Basic · 先规划再执行', 'live-memory':'Basic · 持久记忆',
+    'live-tool-sandbox':'Basic · 容器工具', 'live-subagent':'Basic · 按需子代理',
+    'live-multi-agent':'Basic · 并行子代理', 'live-dynamic-spawn':'Basic · 动态子代理',
+    'live-dynamic-tools':'Basic · 动态工具注册', 'live-approval':'Basic · 工具审批',
+    'live-mcp':'Basic · MCP 文件工具', 'live-random-names':'Basic · 自定义节点身份'}
 PERMISSIONS=['tools:manage','tool:read_file','tool:shell','tool:python','tool:fixture_http','tool:inspect_metadata',
              'tool:delegate_agent','tool:mcp_echo']
 
@@ -92,8 +99,8 @@ async def load(root,profile='viz-basic',**kwargs):
     root=Path(root)
     if not root.is_absolute():root=ROOT/root
     bootstrap=[]
-    if profile=='live':
-        registry,data,payload,names=build_live(root,**kwargs)
+    if profile in LIVE_PROFILES:
+        registry,data,payload,names=build_live(root,profile=profile,**kwargs)
         bootstrap=[{'instance':'tools','method':'bootstrap','payload':{}}]
     elif profile in PROFILES:
         registry,data,payload,names=build(root,profile,**kwargs)
@@ -119,15 +126,26 @@ async def load(root,profile='viz-basic',**kwargs):
     return host,payload,names
 
 
-def build_live(root,connection,options=None):
+def build_live(root,connection,options=None,profile='live'):
     options=options or {};root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True)
-    enabled=options.get('tools',['file'])
+    if profile not in LIVE_PROFILES:raise ValueError('Unknown live profile')
+    enabled=list(options.get('tools',['file']))
     if not isinstance(enabled,list) or set(enabled)-{'file','python','shell','delegate'}:raise ValueError('Unknown tool selection')
+    required={'live-tool-sandbox':['python','shell'],'live-subagent':['delegate'],
+        'live-multi-agent':['delegate'],'live-dynamic-spawn':['delegate'],
+        'live-dynamic-tools':['file'],'live-approval':['python'],'live-mcp':[], 'live-memory':[]}
+    enabled=list(dict.fromkeys(enabled+required.get(profile,[])))
+    benchmark=options.get('benchmark')
+    if benchmark:
+        # Only adapter-provided public evidence is exposed, never the dataset/gold directory.
+        enabled=[x for x in enabled if x=='delegate']
+        if profile not in ('live','live-plan-execute','live-memory','live-subagent','live-multi-agent','live-dynamic-spawn'):
+            raise ValueError('SearchQA 支持工具循环、规划、记忆和子代理配置；单步/系统工具演示不作为完整答题配置')
     max_steps=options.get('max_steps',32)
     if type(max_steps) is not int or not 1<=max_steps<=1000:raise ValueError('Step limit must be 1..1000')
     request_limit=options.get('request_limit')
     if request_limit is not None and (type(request_limit) is not int or request_limit<1):raise ValueError('Invalid request limit')
-    workspace=Path(options['workspace']).expanduser().resolve() if options.get('workspace') else root/'workspace'
+    workspace=Path(options['workspace']).expanduser().resolve() if options.get('workspace') and not benchmark else root/'workspace'
     if options.get('workspace') and not workspace.is_dir():raise ValueError('Workspace folder does not exist; use a WSL path')
     workspace.mkdir(parents=True,exist_ok=True)
     def spec(plugin,config=None,bindings=None,reentrant=False):
@@ -139,8 +157,11 @@ def build_live(root,connection,options=None):
         'history':spec('history.sqlite',{'backend':'sqlite','path':str(root/'history.sqlite')}),
         'context':spec('context.window',{'mode':'window','turns':20,'max_chars':200000}),
         'budget':spec('budget.accounting',{'mode':'accounting','requests':request_limit,'path':str(root/'usage.json')}),
-        'tools':spec('tools.registry',{'providers':enabled,'static':enabled},{**{x:x for x in enabled},'policy':'policy'},True),
+        'tools':spec('tools.registry',{'providers':list(enabled),'static':list(enabled)},{**{x:x for x in enabled},'policy':'policy'},True),
         'policy':spec('tools.policy.basic',{'mode':'manual','timeout_seconds':300})}
+    if profile=='live-plan-execute':instances['agent'].update(plugin='agent.plan-execute');instances['agent']['config']['mode']='plan_execute'
+    if profile=='live-single-step':instances['agent'].update(plugin='agent.single-step');instances['agent']['config']['mode']='single_step'
+    if profile=='live-memory':instances['context']['config']['turns']=100
     if 'file' in enabled:
         instances['workspace']=spec('workspace.local',{'root':str(workspace)})
         instances['file']=spec('tool.file',{}, {'workspace':'workspace'})
@@ -148,15 +169,47 @@ def build_live(root,connection,options=None):
         instances['sandbox']=spec('sandbox.container',{'root':str(workspace),'timeout_seconds':30})
         for kind in set(enabled)&{'python','shell'}:instances[kind]=spec('tool.'+kind,{'kind':kind,'timeout_ms':35000},{'sandbox':'sandbox'})
     templates={}
+    child_tools=[{'file':'read_file','python':'python','shell':'shell'}[x] for x in enabled if x in ('file','python','shell')]
+    if benchmark:child_tools+=['search_snippets','read_snippet']
     if 'delegate' in enabled:
-        instances['manager']=spec('subagent.manager',{'default_tools':['read_file'] if 'file' in enabled else [],'child_max_steps':max_steps,'reservation_tokens':0},shared,True)
+        instances['manager']=spec('subagent.manager',{'default_tools':child_tools,'child_max_steps':max_steps,'reservation_tokens':0},shared,True)
         instances['delegate']=spec('tool.delegate-agent',{'timeout_ms':1800000}, {'manager':'manager'},True)
-        templates['child']=spec('agent.basic-loop',{'max_steps':max_steps,'reservation_tokens':0},shared)
+        templates['child']=spec('agent.basic-loop',{'max_steps':max_steps,'reservation_tokens':0,'system_prompt':instances['agent']['config']['system_prompt']},shared)
+    entry={'instance':'agent','method':'run'}
+    if profile in ('live-multi-agent','live-dynamic-spawn','live-dynamic-tools'):
+        mode={'live-multi-agent':'concurrent','live-dynamic-spawn':'spawn','live-dynamic-tools':'dynamic'}[profile]
+        instances['workflow']=spec('workflow.live',{'mode':mode},
+            {'driver':'agent','tools':'tools',**({'manager':'manager'} if 'manager' in instances else {})})
+        if mode=='dynamic':instances['tools']['config']['static'].remove('file')
+        entry={'instance':'workflow','method':'run'}
+    if profile=='live-mcp':
+        instances.setdefault('workspace',spec('workspace.local',{'root':str(workspace)}))
+        instances['mcp_server']=spec('mcp.workspace',{}, {'workspace':'workspace'})
+        instances['mcp']=spec('tools.mcp',{}, {'server':'mcp_server'})
+        instances['tools']['bindings']['mcp']='mcp'
+        instances['tools']['config']['providers'].append('mcp');instances['tools']['config']['static'].append('mcp')
+    if benchmark:
+        directory=root/'benchmark'
+        instances['adapter']=spec('benchmark.searchqa',{'public_path':str(directory/'public.json'),'gold_path':str(directory/'gold.json')})
+        instances['evidence']=spec('tool.searchqa',{}, {'adapter':'adapter'})
+        instances['tools']['bindings']['evidence']='evidence'
+        instances['tools']['config']['providers'].append('evidence');instances['tools']['config']['static'].append('evidence')
+        instances['benchmark']=spec('benchmark.runner',{'directory':str(directory),'selection_path':str(directory/'selection.json')},
+            {'adapter':'adapter','agent':entry['instance'],'budget':'budget'})
+        entry={'instance':'benchmark','method':'run'}
     registry=Registry();definitions=[]
     for name in sorted({s['plugin'] for s in [*instances.values(),*templates.values()]}):
         d=PluginDefinition.read(CATALOG/'basicagent'/name);registry.register(d);definitions.append(d)
     permission={'file':'read_file','delegate':'delegate_agent','python':'python','shell':'shell'}
-    data={'kernel_api':1,'composition':'Live Agent','packages':[{'id':d.id,'version':d.version,'digest':d.digest} for d in definitions],
-          'instances':instances,'templates':templates,'entry':{'instance':'agent','method':'run'},
-          'control':{'permissions':['tools:manage']+['tool:'+permission[x] for x in enabled],'max_wall_seconds':3600}}
+    permissions=['tools:manage']+['tool:'+permission[x] for x in enabled if x in permission]
+    if benchmark:permissions+=['tool:search_snippets','tool:read_snippet']
+    if profile=='live-mcp':permissions+=['tool:mcp_read_file']
+    data={'kernel_api':1,'composition':LIVE_PROFILES[profile]+(' · SearchQA' if benchmark else ''),'packages':[{'id':d.id,'version':d.version,'digest':d.digest} for d in definitions],
+          'instances':instances,'templates':templates,'entry':entry,
+          'control':{'permissions':permissions,'max_wall_seconds':86400 if benchmark else 3600}}
+    if profile=='live-random-names':
+        # Rename only the model to demonstrate binding independence without changing bootstrap identifiers.
+        instances['inference_service']=instances.pop('model')
+        for row in [*instances.values(),*templates.values()]:
+            row['bindings']={alias:('inference_service' if target=='model' else target) for alias,target in row.get('bindings',{}).items()}
     return registry,data,{'session':'main'}, {n:n for n in instances}

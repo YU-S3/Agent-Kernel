@@ -19,8 +19,19 @@ def main(argv=None):
     test.add_argument('--offline',action='store_true',required=True);test.add_argument('--report-dir',default='reports/basicagent')
     test.add_argument('--browser-evidence',default='reports/browser/browser_validation.json')
     run=sub.add_parser('run');run.add_argument('--profile',default='viz-basic');run.add_argument('--report-dir',default='runs/cli');run.add_argument('--task',default='Read data.txt and report its line count')
+    dataset=sub.add_parser('dataset');dataset.add_argument('action',choices=['import']);dataset.add_argument('--file',required=True)
+    dataset.add_argument('--split',default='custom');dataset.add_argument('--catalog',default='runs/datasets')
+    dataset.add_argument('--sha256');dataset.add_argument('--source-url',default='local-import')
     visual=sub.add_parser('visual');visual.add_argument('action',choices=['serve']);visual.add_argument('--profile',default='profiles/basicagent-viz.yaml')
     args=parser.parse_args(argv)
+    if args.command=='dataset':
+        from .benchmarks import DatasetCatalog
+        catalog=DatasetCatalog(args.catalog);path=Path(args.file)
+        if path.suffix.lower()=='.zip':
+            if not args.sha256:parser.error('ZIP import requires --sha256 from the upstream file manifest')
+            result=catalog.import_archive(path,args.split,args.sha256,args.source_url)
+        else:result=catalog.import_bytes(path.read_bytes(),path.name,args.split)
+        print(json.dumps(result,ensure_ascii=False,indent=2));return
     if hasattr(args,'report_dir'):args.report_dir=str(Path(args.report_dir).resolve())
     if args.command=='test':
         import pytest
@@ -29,7 +40,7 @@ def main(argv=None):
         os.environ['AGENTLAB_BROWSER_EVIDENCE']=str(Path(args.browser_evidence).resolve())
         files=[]
         if args.suite in ('basicagent','all'):
-            files.extend(str(ROOT/'tests'/name) for name in ('test_basicagent.py','test_application_http.py','test_live_workbench.py','test_provider_network.py'))
+            files.extend(str(ROOT/'tests'/name) for name in ('test_basicagent.py','test_application_http.py','test_live_workbench.py','test_provider_network.py','test_benchmark_live_modes.py'))
         if args.suite in ('kernel-contracts','all'):files.extend(str(ROOT/'tests'/('test_kernel_'+x+'.py')) for x in ('v1','contracts','control','wire'))
         raise SystemExit(pytest.main([*files,'-q','--disable-warnings','--junitxml='+str(report/'junit.xml')]))
     async def execute():

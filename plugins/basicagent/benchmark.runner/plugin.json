@@ -1,0 +1,33 @@
+{
+  "id": "benchmark.runner",
+  "version": "1.0.0",
+  "kernel_api": 1,
+  "loader": {
+    "adapter": "python",
+    "target": "plugin:apply"
+  },
+  "exports": [
+    "run",
+    "pause"
+  ],
+  "requires": {
+    "adapter": [
+      "open",
+      "score",
+      "close"
+    ],
+    "agent": [
+      "run"
+    ],
+    "budget": [
+      "remaining"
+    ]
+  },
+  "config_schema": {
+    "type": "object"
+  },
+  "python_dependencies": [
+    "agentlab_plugins",
+    "agentlab_app"
+  ]
+}

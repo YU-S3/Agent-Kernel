@@ -1,0 +1,24 @@
+{
+  "id": "mcp.workspace",
+  "version": "1.0.0",
+  "kernel_api": 1,
+  "loader": {
+    "adapter": "python",
+    "target": "plugin:apply"
+  },
+  "exports": [
+    "request"
+  ],
+  "requires": {
+    "workspace": [
+      "read"
+    ]
+  },
+  "config_schema": {
+    "type": "object"
+  },
+  "python_dependencies": [
+    "agentlab_plugins",
+    "agentlab_app"
+  ]
+}

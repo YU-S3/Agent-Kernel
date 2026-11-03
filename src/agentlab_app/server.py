@@ -7,8 +7,9 @@ from pathlib import Path
 from aiohttp import web
 from agentlab.abi import KernelError
 from agentlab.observation import snapshot
-from .distribution import load,build,build_live,PROFILES,ROOT
+from .distribution import load,build,build_live,PROFILES,LIVE_PROFILES,ROOT
 from .settings import ModelSettings
+from .benchmarks import DatasetCatalog
 
 STATIC=Path(__file__).parent/'static'
 
@@ -17,6 +18,7 @@ class Application:
     def __init__(self,root,profiles_dir=None):
         self.root=Path(root).resolve();self.root.mkdir(parents=True,exist_ok=True)
         self.runs={}
+        self.datasets=DatasetCatalog(self.root.parent/'datasets')
         self.profiles_dir=Path(profiles_dir).resolve() if profiles_dir else None
         self.models=ModelSettings(Path.home()/'.agentlab',ROOT/'.env')
         for path in self.root.glob('*/result.json'):
@@ -31,7 +33,7 @@ class Application:
             except (ValueError,KeyError,OSError):continue
 
     def profiles(self):
-        profiles={'live':'live',**{name:name for name in PROFILES}}
+        profiles={name:name for name in [*LIVE_PROFILES,*PROFILES]}
         if self.profiles_dir and self.profiles_dir.is_dir():
             for path in sorted(self.profiles_dir.glob('*.yaml')):
                 descriptor=yaml.safe_load(path.read_text())
@@ -60,7 +62,8 @@ class Application:
             row.update(execution=ex,status='running')
             self.persist(row)
             async for chunk in ex.stream():pass  # observations are already independently recorded
-            result=await ex.wait();row.update(result=result,status='truncated' if isinstance(result,dict) and result.get('status')=='truncated' else 'completed',error=None)
+            result=await ex.wait();status=result.get('status') if isinstance(result,dict) else None
+            row.update(result=result,status=status if status in ('truncated','paused','interrupted','step_completed') else 'completed',error=None)
         except asyncio.CancelledError:
             row.update(status='cancelled',error={'code':'EXECUTION.CANCELLED','outcome_known':False})
         except KernelError as exc:
@@ -88,18 +91,29 @@ class Application:
             except KernelError as exc:return web.json_response({'error':exc.envelope},status=409)
             except ValueError as exc:raise web.HTTPBadRequest(text=str(exc))
             except (KeyError,TypeError):raise web.HTTPBadRequest(text='Invalid request structure')
-        app=web.Application(middlewares=[boundaries],client_max_size=65536)
+        app=web.Application(middlewares=[boundaries],client_max_size=100*1024*1024)
         async def index(request):return web.FileResponse(STATIC/'index.html')
-        async def profiles(request):return web.json_response({'profiles':list(self.profiles()),'mode':'mixed'})
+        async def profiles(request):return web.json_response({'profiles':list(self.profiles()),'live_profiles':LIVE_PROFILES,'mode':'mixed'})
+        async def datasets(request):return web.json_response(self.datasets.list())
+        async def import_dataset(request):
+            if request.content_type=='application/json':
+                data=await request.json();path=Path(data['path']).expanduser()
+                if not path.is_file():raise ValueError('文件不存在；请填写 WSL 路径或使用上传按钮')
+                if path.stat().st_size>100*1024*1024:raise ValueError('导入文件超过 100 MiB，请按 split 分文件')
+                raw=await asyncio.to_thread(path.read_bytes);name=data.get('name',path.name);split=data.get('split','unspecified')
+            else:
+                raw=await request.read();name=request.query.get('name','SearchQA');split=request.query.get('split','unspecified')
+            record=await asyncio.to_thread(self.datasets.import_bytes,raw,name,split)
+            return web.json_response(record,status=201)
         async def model_settings(request):
             if request.method=='GET':return web.json_response(self.models.public())
             return web.json_response(self.models.save(await request.json()))
         def configuration(data,path):
             profile=data.get('profile','live')
-            if profile=='live':
+            if profile in LIVE_PROFILES:
                 c=self.models.config()
                 runtime={'connection':{**c,'credential_file':str(self.models.secret),'env_file':str(self.models.env_file)},'options':data.get('options',{})}
-                _,composition,_,_=build_live(path,**runtime)
+                _,composition,_,_=build_live(path,profile=profile,**runtime)
             elif profile in PROFILES:
                 runtime={};_,composition,_,_=build(path,profile)
             else:
@@ -117,7 +131,9 @@ class Application:
             data=await request.json();profile=data.get('profile','viz-basic')
             catalog=self.profiles()
             if profile not in catalog:raise web.HTTPBadRequest(text='Unknown profile')
-            if profile=='live' and not self.models.key():raise web.HTTPBadRequest(text='请先在模型设置中保存 API Key，或填写项目 .env 的 DEEPSEEK_API_KEY。')
+            if profile in LIVE_PROFILES and not self.models.key():raise web.HTTPBadRequest(text='请先在模型设置中保存 API Key，或填写项目 .env 的 DEEPSEEK_API_KEY。')
+            bench=data.get('options',{}).get('benchmark')
+            if bench and profile not in LIVE_PROFILES:raise ValueError('Benchmark 必须使用真实模型配置；离线示例不是正式答题')
             if sum(r['status'] in ('loading','running') for r in self.runs.values())>=4:raise web.HTTPTooManyRequests(text='Four active runs maximum')
             # Keep at most eight live Hosts; completed traces remain on disk.
             for row in list(self.runs.values())[:-7]:
@@ -127,6 +143,7 @@ class Application:
             row={'id':ident,'path':path,'profile':profile,'profile_source':catalog[profile],'status':'loading'};self.runs[ident]=row
             try:
                 runtime,composition=configuration(data,path);row['runtime']=runtime
+                if bench:self.datasets.materialize(bench,path)
                 if composition:row['snapshot']=preview(composition)
                 (path/'runtime.json').write_text(json.dumps(runtime,indent=2))
                 self.persist(row)
@@ -143,8 +160,18 @@ class Application:
         async def state(request):
             row=get(request);host=row.get('host')
             view=snapshot(host) if host else row.get('snapshot',{'instances':{},'executions':{}})
-            return web.json_response(dict(view,run_id=row['id'],run_status=row['status'],result=row.get('result'),error=row.get('error'),
-                actions={'history':'history' in row.get('names',{}) or row['profile']=='live','approval':'policy' in row.get('names',{}),'continue':bool(host) or row['profile']=='live'}))
+            progress=row['path']/'benchmark/progress.json';selection=row['path']/'benchmark/selection.json'
+            bench=json.loads(progress.read_text()) if progress.exists() else None
+            if bench is None and selection.exists():
+                sel=json.loads(selection.read_text());bench={'status':'loading','finished':0,'total':sel['count'],'tasks':[]}
+            return web.json_response(dict(view,run_id=row['id'],run_status=row['status'],result=row.get('result'),error=row.get('error'),benchmark=bench,
+                actions={'history':'history' in row.get('names',{}) or row['profile'] in LIVE_PROFILES,'approval':'policy' in row.get('names',{}),
+                    'continue':(bool(host) or row['profile'] in LIVE_PROFILES) and (not bench or row['status'] in ('paused','interrupted','failed','cancelled')),
+                    'pause':bool(bench) and row['status']=='running'}))
+        async def pause_benchmark(request):
+            row=get(request)
+            if not row.get('host') or 'benchmark' not in row.get('names',{}):raise ValueError('当前不是运行中的 benchmark')
+            return web.json_response(await row['host'].invoke('benchmark','pause',{}).wait())
         async def events(request):
             row=get(request);host=row.get('host');after=int(request.query.get('after','0'))
             if host:return web.json_response(host.observation.read(after))
@@ -158,7 +185,8 @@ class Application:
             return web.json_response({'accepted':True})
         async def continuation(request):
             row=get(request)
-            if row['status'] in ('loading','running') or (not row.get('host') and row['profile']!='live'):raise web.HTTPConflict(text='Host not idle or fixture cannot be restored')
+            if row['status'] in ('loading','running') or (not row.get('host') and row['profile'] not in LIVE_PROFILES):raise web.HTTPConflict(text='Host not idle or fixture cannot be restored')
+            if (row['path']/'benchmark/selection.json').exists() and row['status']=='completed':raise web.HTTPConflict(text='已完成的 benchmark 不会重复运行；请新建实验')
             body=await request.json();row.update(status='loading',result=None,error=None)
             self.persist(row)
             row['task']=asyncio.create_task(self.execute(row,{k:v for k,v in body.items() if k in ('task','session')}))
@@ -177,7 +205,7 @@ class Application:
             return web.json_response(await row['host'].invoke(row['names']['policy'],'decide',body).wait())
         async def history(request):
             row=get(request)
-            if not row.get('host') and row['profile']=='live':
+            if not row.get('host') and row['profile'] in LIVE_PROFILES:
                 import sqlite3
                 with sqlite3.connect(row['path']/'history.sqlite') as db:
                     return web.json_response({'messages':[json.loads(r[0]) for r in db.execute('SELECT body FROM facts WHERE session=? ORDER BY seq',(request.query.get('session','main'),))]})
@@ -193,8 +221,9 @@ class Application:
             rows=[json.loads(line) for line in (path/'kernel_events.jsonl').read_text().splitlines()]
             return web.json_response({'snapshot':json.loads((path/'snapshot.json').read_text()),'events':rows,
                 'result':json.loads((path/'result.json').read_text()),'gap':any(b['seq']!=a['seq']+1 for a,b in zip(rows,rows[1:]))})
-        app.add_routes([web.get('/',index),web.get('/api/model',model_settings),web.post('/api/model',model_settings),web.post('/api/preview',config_preview),web.get('/api/profiles',profiles),web.get('/api/runs',runs),web.post('/api/runs',start),
+        app.add_routes([web.get('/',index),web.get('/api/model',model_settings),web.post('/api/model',model_settings),web.post('/api/preview',config_preview),web.get('/api/profiles',profiles),web.get('/api/datasets',datasets),web.post('/api/datasets/import',import_dataset),web.get('/api/runs',runs),web.post('/api/runs',start),
             web.get('/api/runs/{id}',state),web.get('/api/runs/{id}/events',events),web.post('/api/runs/{id}/cancel',cancel),
+            web.post('/api/runs/{id}/pause',pause_benchmark),
             web.post('/api/runs/{id}/continue',continuation),web.get('/api/runs/{id}/approvals',approvals),
             web.post('/api/runs/{id}/approvals',decide),web.get('/api/runs/{id}/history',history),web.get('/api/replay/{id}',replay)])
         app.router.add_static('/static/',STATIC)

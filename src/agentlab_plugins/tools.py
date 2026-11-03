@@ -78,3 +78,17 @@ async def mcp_fixture_apply(ctx,config):
         else: return {'jsonrpc':'2.0','id':p['id'],'error':{'code':-32601,'message':'Unknown method'}}
         return {'jsonrpc':'2.0','id':p['id'],'result':out}
     ctx.expose('request',request)
+
+
+async def mcp_workspace_apply(ctx,config):
+    """Local MCP method bridge to the authorized workspace (no fixture responses)."""
+    async def request(p,c):
+        if p['method']=='tools/list':
+            out={'tools':[{'name':'mcp_read_file','description':'Read a UTF-8 file from the authorized workspace through MCP.',
+                'inputSchema':{'type':'object','properties':{'path':{'type':'string'}},'required':['path'],'additionalProperties':False}}]}
+        elif p['method']=='tools/call' and p['params']['name']=='mcp_read_file':
+            data=await ctx.call('workspace','read',p['params']['arguments'],parent=c)
+            out={'content':[{'type':'text','text':data['text']}],'isError':False}
+        else:return {'jsonrpc':'2.0','id':p['id'],'error':{'code':-32601,'message':'Unknown method or tool'}}
+        return {'jsonrpc':'2.0','id':p['id'],'result':out}
+    ctx.expose('request',request)

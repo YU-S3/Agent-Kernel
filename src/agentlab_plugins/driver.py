@@ -15,10 +15,12 @@ async def apply(ctx,config):
         await append({'role':'user','content':str(p.get('task','Read data.txt'))})
         mode=config.get('mode','basic')
         scenario=p.get('scenario',config.get('scenario','read'))
-        async def infer(scenario):
-            tools=await ctx.call('tools','list',{},parent=call)
+        async def infer(scenario, planning=False):
+            tools=[] if planning else await ctx.call('tools','list',{},parent=call)
             facts=await ctx.call('history','read',{'session':session},parent=call)
             projection=await ctx.call('context','build',facts,parent=call)
+            if planning:
+                projection['messages'].append({'role':'user','content':'First write a concise plan for the current task. Do not execute tools or give the final answer yet. Execution follows in the next step.'})
             reservation=await ctx.call('budget','reserve',{'tokens':config.get('reservation_tokens',128)},parent=call)
             response=None
             try:
@@ -36,8 +38,13 @@ async def apply(ctx,config):
             await ctx.call('budget','settle',{'id':reservation['id'],'tokens':response.get('usage',{}).get('total_tokens')},parent=call)
             return response
         if mode=='plan_execute':
-            planning=await infer('plan');await append(planning['message'])
+            planning=await infer('plan',planning=True)
+            if planning['message'].get('tool_calls'):fail('PROVIDER.UNEXPECTED_PLANNING_TOOL_CALL')
+            await append(planning['message'])
             emit(ctx,'agent.plan',{'session':session,'plan':planning['message']['content']},call)
+            if planning.get('finish_reason')=='length':
+                return {'session':session,'answer':'','steps':1,'status':'truncated','finish_reason':'length'}
+            await append({'role':'user','content':'Now execute the plan using the available tools as needed, then provide the final answer to the original task.'})
         for step in range(config.get('max_steps',6)):
             response=await infer(scenario)
             message=response.get('message',{})

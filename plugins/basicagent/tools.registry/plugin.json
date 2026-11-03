@@ -53,6 +53,10 @@
     "mcp": [
       "describe",
       "execute"
+    ],
+    "evidence": [
+      "describe",
+      "execute"
     ]
   }
 }

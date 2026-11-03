@@ -4,7 +4,8 @@ let state={instances:{},executions:{}},events=[],runId=null,cursor=0,mode='bindi
 const svg=$('graph');
 let routeSignature='',routes=[],generation=0,previewVersion=0,hot={},draft='',knownUsage=0,unknownUsage=0;
 const names={live:'真实模型 · 日常对话','viz-basic':'离线示例 · 读文件','viz-subagent':'离线示例 · 子代理','viz-tool-sandbox':'离线示例 · 容器工具'};
-function options(){return {tools:[...document.querySelectorAll('[name=tool]:checked')].map(e=>e.value),workspace:$('workspace').value,max_steps:Number($('maxSteps').value),request_limit:$('requestLimit').value?Number($('requestLimit').value):null}}
+let liveProfiles={},datasets=[];
+function options(){const result={tools:[...document.querySelectorAll('[name=tool]:checked')].map(e=>e.value),workspace:$('workspace').value,max_steps:Number($('maxSteps').value),request_limit:$('requestLimit').value?Number($('requestLimit').value):null};if($('taskSource').value==='searchqa')result.benchmark={dataset_id:$('dataset').value,start:Number($('taskStart').value),count:Number($('taskCount').value)};return result}
 const el=(name,attrs={})=>{const n=document.createElementNS(NS,name);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);return n};
 const text=(value,x,y,cls='')=>{let n=el('text',{x,y,class:cls});n.textContent=value;return n};
 function showError(err){$('warning').textContent=String(err.message||err);}
@@ -63,13 +64,13 @@ function applyEvent(e){
  if(e.event.startsWith('execution.')&&state.executions[e.execution]&&e.event!=='execution.progress'&&e.event!=='execution.created')state.executions[e.execution].state=e.event.split('.')[1]==='started'?'running':e.event.split('.')[1];
  log(e);render();$('count').textContent=`${e.seq} events`;
 }
-function resetView(){hot={};draft='';$('result').textContent='回答将在这里显示';$('usage').textContent='';$('count').textContent='0 events';$('details').textContent='点击节点或事件查看详情；箭头表示实际依赖或调用方向。';$('approvals').replaceChildren();knownUsage=unknownUsage=0;positions={};manual={};cameraReady=false;userCamera=false;lastNodes=0;$('events').replaceChildren();$('warning').textContent='';}
-async function refreshRuns(){const runs=await api('/api/runs');const selected=runId;$('runList').replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='选择已有会话';$('runList').append(placeholder);for(const r of runs){const o=document.createElement('option');o.value=r.id;o.textContent=`${names[r.profile]||r.profile} · ${r.status} · ${r.id.slice(0,6)}`;$('runList').append(o)}if(selected)$('runList').value=selected;}
+function resetView(){renderBenchmark(null);hot={};draft='';$('result').textContent='回答将在这里显示';$('usage').textContent='';$('count').textContent='0 events';$('details').textContent='点击节点或事件查看详情；箭头表示实际依赖或调用方向。';$('approvals').replaceChildren();knownUsage=unknownUsage=0;positions={};manual={};cameraReady=false;userCamera=false;lastNodes=0;$('events').replaceChildren();$('warning').textContent='';}
+async function refreshRuns(){const runs=await api('/api/runs');const selected=runId;$('runList').replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='选择已有会话';$('runList').append(placeholder);for(const r of runs){const o=document.createElement('option');o.value=r.id;o.textContent=`${liveProfiles[r.profile]||names[r.profile]||r.profile} · ${r.status} · ${r.id.slice(0,6)}`;$('runList').append(o)}if(selected)$('runList').value=selected;}
 async function poll(){if(!runId||replayMode||polling)return;polling=true;try{
  const activeId=runId,version=generation;const [snapshot,stream]=await Promise.all([api(`/api/runs/${runId}`),api(`/api/runs/${runId}/events?after=${cursor}`)]);if(activeId!==runId||version!==generation||replayMode)return;
  const changed=state.run_status!==snapshot.run_status;if(Object.keys(snapshot.instances||{}).length)state=snapshot;else state={...state,run_status:snapshot.run_status};if(changed)await refreshRuns();for(const e of stream.events){events.push(e);observe(e);log(e);}cursor=stream.cursor;if(stream.gap)$('warning').textContent='观察事件有缺口；当前快照已恢复。完整记录可从磁盘回放。';render();
- $('status').textContent=`${snapshot.run_status} · ${runId.slice(0,8)}`;if(snapshot.result)$('result').textContent=snapshot.result.answer??JSON.stringify(snapshot.result,null,2);else if(snapshot.error)$('result').textContent=JSON.stringify(snapshot.error,null,2);else if(!draft)$('result').textContent=snapshot.run_status==='loading'?'正在装载插件，配置图保持可见…':'模型正在处理，输出将实时显示…';$('count').textContent=`${cursor} events`;
- const active=['loading','running'].includes(snapshot.run_status);$('cancel').disabled=!active;$('continue').disabled=active||!snapshot.actions?.continue;$('history').disabled=!snapshot.actions?.history;$('continue').textContent=snapshot.actions?.history?'继续此会话':'再次执行';
+ renderBenchmark(snapshot.benchmark);$('status').textContent=`${snapshot.run_status} · ${runId.slice(0,8)}`;if(snapshot.result)$('result').textContent=snapshot.benchmark?`已结算 ${snapshot.benchmark.finished}/${snapshot.benchmark.total} 题；逐题结果与轨迹见右侧进度表。`:snapshot.result.answer??JSON.stringify(snapshot.result,null,2);else if(snapshot.error)$('result').textContent=JSON.stringify(snapshot.error,null,2);else if(!draft)$('result').textContent=snapshot.run_status==='loading'?'正在装载插件，配置图保持可见…':'模型正在处理，输出将实时显示…';$('count').textContent=`${cursor} events`;
+ const active=['loading','running'].includes(snapshot.run_status);$('cancel').disabled=!active;$('continue').disabled=active||!snapshot.actions?.continue;$('history').disabled=!snapshot.actions?.history;$('continue').textContent=snapshot.benchmark?'继续剩余题目':snapshot.actions?.history?'继续此会话':'再次执行';$('pauseBenchmark').hidden=!snapshot.benchmark;$('pauseBenchmark').disabled=!snapshot.actions?.pause||snapshot.benchmark?.pause_requested;
  if(snapshot.run_status==='running'){
   const approvals=await api(`/api/runs/${runId}/approvals`);$('approvals').replaceChildren();for(const item of approvals){const div=document.createElement('div');div.className='approval';div.textContent=`工具审批：${item.tool}`;if(item.arguments){const pre=document.createElement('pre');pre.textContent=JSON.stringify(item.arguments,null,2);div.append(pre)}for(const [label,allow]of [['允许',true],['拒绝',false]]){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await api(`/api/runs/${runId}/approvals`,{id:item.id,allow});div.remove();}catch(e){showError(e)}};div.append(b)}$('approvals').append(div);}}
  else $('approvals').replaceChildren();
@@ -80,7 +81,7 @@ async function start(){previewVersion++;pause();replayMode=false;generation++;ru
 async function replay(){if(!runId)runId=$('runList').value;if(!runId)return;pause();generation++;const data=await api('/api/replay/'+runId);events=data.events;state={composition:data.snapshot.composition,entry:data.snapshot.entry,root_scope:data.snapshot.root_scope,instances:{},executions:{}};replayMode=true;replayCursor=0;resetView();render();$('status').textContent='磁盘回放 · 0 / '+events.length;if(data.gap)$('warning').textContent='磁盘事件存在缺口';$('result').textContent=JSON.stringify(data.result,null,2);}
 function step(){if(!replayMode||replayCursor>=events.length){pause();return;}applyEvent(events[replayCursor++]);$('status').textContent=`磁盘回放 · ${replayCursor} / ${events.length}`;}
 function pause(){if(timer)clearInterval(timer);timer=null;if(replayMode){hot={};render();}}
-$('run').onclick=start;$('cancel').onclick=()=>api(`/api/runs/${runId}/cancel`,{}).catch(showError);
+$('run').onclick=start;$('pauseBenchmark').onclick=()=>api(`/api/runs/${runId}/pause`,{}).then(poll).catch(showError);$('cancel').onclick=()=>api(`/api/runs/${runId}/cancel`,{}).catch(showError);
 $('continue').onclick=()=>{pause();replayMode=false;draft='';return api(`/api/runs/${runId}/continue`,{task:$('task').value}).then(poll).catch(showError)};
 $('history').onclick=()=>api(`/api/runs/${runId}/history`).then(data=>$('details').textContent=JSON.stringify(data,null,2)).catch(showError);
 $('runList').onchange=()=>{previewVersion++;generation++;runId=$('runList').value;cursor=0;events=[];replayMode=false;resetView();poll()};
@@ -97,8 +98,35 @@ window.addEventListener('resize',()=>{if(!cameraReady)return;if(!userCamera){fit
 async function showModel(){try{const c=await api('/api/model');$('apiBase').value=c.base_url;$('apiModel').value=c.model;$('thinking').value=c.thinking;$('effort').value=c.reasoning_effort;$('apiTimeout').value=c.timeout;$('outputLimit').value=c.max_tokens??'';$('apiKey').value='';$('modelStatus').textContent=`${c.model} · ${c.key_configured?'密钥已配置（尚未验证连接）':'尚未配置密钥'}`;return c}catch(e){showError(e)}}
 $('modelSettings').onclick=async()=>{await showModel();$('modelMessage').textContent='';$('modelDialog').showModal()};$('closeModel').onclick=()=>$('modelDialog').close();
 $('modelForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/model',{base_url:$('apiBase').value,model:$('apiModel').value,api_key:$('apiKey').value,thinking:$('thinking').value,reasoning_effort:$('effort').value,max_tokens:$('outputLimit').value?Number($('outputLimit').value):null,timeout:Number($('apiTimeout').value),stream:true});$('apiKey').value='';$('modelMessage').textContent='已保存。新对话使用此配置；已有会话保持原模型。';await showModel();}catch(e){$('modelMessage').textContent=e.message}};
-$('profile').onchange=preview;for(const input of document.querySelectorAll('[name=tool],#workspace,#maxSteps,#requestLimit'))input.onchange=()=>{if($('profile').value==='live')preview()};
-async function initialize(){try{const p=await api('/api/profiles');for(const name of p.profiles){const o=document.createElement('option');o.textContent=names[name]||(name.startsWith('viz-')?'离线示例 · '+name.slice(4):name);o.value=name;$('profile').append(o)}$('connection').textContent='已连接 · localhost';await showModel();await Promise.all([refreshRuns(),preview()]);}catch(e){showError(e)}}
+$('profile').onchange=()=>{updateInputs();preview()};for(const input of document.querySelectorAll('[name=tool],#workspace,#maxSteps,#requestLimit'))input.onchange=()=>{if(liveProfiles[$('profile').value])preview()};
+async function initialize(){try{const p=await api('/api/profiles');liveProfiles=p.live_profiles||{live:'Basic · 工具循环'};for(const name of p.profiles){const o=document.createElement('option');o.textContent=liveProfiles[name]||names[name]||(name.startsWith('viz-')?'离线示例 · '+name.slice(4):name);o.value=name;$('profile').append(o)}$('connection').textContent='已连接 · localhost';await showModel();await loadDatasets();updateInputs();await Promise.all([refreshRuns(),preview()]);}catch(e){showError(e)}}
+
+function updateInputs(){
+ const live=!!liveProfiles[$('profile').value];if(!live)$('taskSource').value='chat';const bench=$('taskSource').value==='searchqa';
+ $('benchmarkOptions').hidden=!bench;$('task').disabled=bench;$('task').hidden=bench;document.querySelector('label[for=task]').hidden=bench;$('runtimeOptions').hidden=!live;$('nativeTools').hidden=bench;
+ $('run').textContent=bench?'开始评测':live?'开始新任务':'运行离线示例';
+ $('profileHint').textContent=live?'使用模型设置中的真实 API。切换 Agent 配置会改变实际插件和工作流。':'固定离线响应，仅用于接口测试，不是模型评测。';
+ if(bench)$('profileHint').textContent+=' SearchQA 推荐 Basic 工具循环；也支持规划、记忆和子代理。';
+ $('taskSource').disabled=!live;
+}
+function datasetInfo(){const d=datasets.find(x=>x.id===$('dataset').value);$('datasetInfo').textContent=d?`${d.split} · ${d.count} 题 · SHA256 ${d.sha256.slice(0,12)}`:'请先导入 SearchQA JSON / JSONL';if(d){$('taskCount').max=d.count;$('taskStart').max=d.count}}
+async function loadDatasets(selected){datasets=await api('/api/datasets');$('dataset').replaceChildren();for(const d of datasets){const o=document.createElement('option');o.value=d.id;o.textContent=`${d.name} · ${d.split} (${d.count})`;$('dataset').append(o)}if(selected)$('dataset').value=selected;else if(datasets.some(d=>d.split==='validation'))$('dataset').value=datasets.find(d=>d.split==='validation').id;datasetInfo();}
+function renderBenchmark(b){
+ $('benchmarkPanel').hidden=!b;if(!b)return;
+ $('benchmarkStatus').textContent=`${b.status} · ${b.finished||0} / ${b.total}`;
+ $('benchmarkProgress').max=b.total||1;$('benchmarkProgress').value=b.finished||0;
+ const pct=x=>x==null?'—':(100*x).toFixed(1)+'%';
+ $('benchmarkStats').textContent=`EM ${pct(b.em)} · F1 ${pct(b.f1)} · 已评分 ${b.scored||0} · 接口/执行错误 ${b.errors||0} · ${b.tokens||0} tokens · ${b.requests||0} 次请求 · 未知用量 ${b.unknown_requests||0}${b.current?' · 当前第 '+b.current.index+' 题':''}${b.pause_requested?' · 等待当前题结束后暂停':''}`;
+ $('benchmarkRows').replaceChildren();
+ for(const r of [...(b.tasks||[]),...(b.current?[{...b.current,status:'running'}]:[])]){
+  const tr=document.createElement('tr');for(const value of [`${r.index} · ${r.id}`,r.status,r.em==null?'—':`${pct(r.em)} / ${pct(r.f1)}`,r.tokens==null?'—':`${r.tokens} / ${r.requests}`,r.elapsed_seconds==null?'—':r.elapsed_seconds+'s',r.answer??r.error?.code??'处理中']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+  const btn=document.createElement('button');btn.textContent='轨迹';btn.onclick=()=>api(`/api/runs/${runId}/history?session=${encodeURIComponent(r.session)}`).then(v=>$('details').textContent=JSON.stringify({task:r,history:v},null,2)).catch(showError);tr.firstChild.append(document.createElement('br'),btn);$('benchmarkRows').append(tr);
+ }
+}
+$('taskSource').onchange=()=>{if($('taskSource').value==='searchqa'&&!['live','live-plan-execute','live-memory','live-subagent','live-multi-agent','live-dynamic-spawn'].includes($('profile').value))$('profile').value='live';updateInputs();preview()};
+$('dataset').onchange=()=>{datasetInfo();preview()};for(const id of ['taskStart','taskCount'])$(id).onchange=preview;
+$('importDataset').onclick=async()=>{const f=$('datasetFile').files[0];if(!f){$('importStatus').textContent='请选择 JSON / JSONL 文件';return}try{const r=await fetch(`/api/datasets/import?name=${encodeURIComponent(f.name)}&split=${encodeURIComponent($('datasetSplit').value)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});if(!r.ok)throw Error(await r.text());const d=await r.json();await loadDatasets(d.id);$('importStatus').textContent=`已导入 ${d.count} 题`;await preview()}catch(e){$('importStatus').textContent=e.message}};
+
 initialize();setInterval(poll,800);
 // Read-only diagnostic snapshot used by UI integration checks, never an execution API.
 window.agentlabDiagnostics=()=>({runId,mode,replayMode,replayCursor,cursor,camera:{...camera},manual:structuredClone(manual),nodeCount:$('nodes').children.length,state:structuredClone(state)});
