@@ -105,3 +105,23 @@ def test_history_is_readable_and_tools_folded(browser_page):
     assert p.locator('#result details').count()==2 and p.locator('#result details[open]').count()==0
     assert p.locator('#result .assistant strong').inner_text()=='Answer'
     assert p.locator('#result .katex').count()==1 and 'INTERNAL_SYSTEM' not in p.locator('#result').inner_text()
+
+
+def test_replay_groups_preserve_all_events_and_errors(browser_page):
+    p=browser_page
+    p.add_script_tag(url=p.url.replace('/fixture','/replay.js'))
+    events=[{'seq':i,'event':'execution.progress','instance':'model' if i%2 else 'child',
+             'detail':{'kind':'text_delta','text':'x'}} for i in range(1300)]
+    error={'seq':1300,'event':'execution.failed','instance':'workspace',
+           'error':{'cause':{'code':'WORKSPACE.NOT_FILE'}}}
+    complete={'seq':1301,'event':'execution.progress','detail':{'kind':'complete'}}
+    events.extend([error,complete])
+    result=p.evaluate('rows=>({groups:AgentReplay.groups(rows),raw:AgentReplay.groups(rows,true),label:AgentReplay.label([rows[1300]])})',events)
+    assert [r for group in result['groups'] for r in group]==events
+    assert [len(g) for g in result['groups']]==[512,512,276,1,1]
+    assert len(result['raw'])==len(events) and all(len(g)==1 for g in result['raw'])
+    assert 'WORKSPACE.NOT_FILE' in result['label']
+    assert p.evaluate('rows=>AgentReplay.visible(rows)',events)==[error]
+    assert p.evaluate('rows=>AgentReplay.visible(rows,true)',events)==events
+    response={'event':'plugin.detail','topic':'model.response','instance':'model','detail':{'answer':'assembled'}}
+    assert p.evaluate('rows=>AgentReplay.visible(rows)',events+[response])==[error,response]

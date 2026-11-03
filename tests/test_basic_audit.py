@@ -85,18 +85,18 @@ def test_search_read_duplicate_stagnation_and_zero_overlap(tmp_path):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('kind',['mcp','binary','missing','escape','symlink'])
+@pytest.mark.parametrize('kind',['mcp','binary','missing','directory','escape','symlink'])
 def test_file_tools_through_real_driver_return_controlled_errors(tmp_path,kind):
     async def run():
         seen=[];work=tmp_path/'work';work.mkdir();(work/'data.txt').write_text('public data')
         (work/'binary').write_bytes(b'\xff\xfe\x00');(work/'link').symlink_to(work/'data.txt')
         name='mcp_read_file' if kind=='mcp' else 'read_file'
-        filename={'mcp':'data.txt','binary':'binary','missing':'absent','escape':'../outside','symlink':'link'}[kind]
+        filename={'mcp':'data.txt','binary':'binary','missing':'absent','directory':'.','escape':'../outside','symlink':'link'}[kind]
         async def chat(r):
             p=await r.json();seen.append(p)
             if len(seen)==1:return response('',[tool_call(name,{'path':filename})])
             text=[m['content'] for m in p['messages'] if m['role']=='tool'][-1]
-            assert {'mcp':'public data','binary':'WORKSPACE.NOT_UTF8','missing':'WORKSPACE.NOT_FOUND','escape':'WORKSPACE.ESCAPE','symlink':'WORKSPACE.SYMLINK'}[kind] in text
+            assert {'mcp':'public data','binary':'WORKSPACE.NOT_UTF8','missing':'WORKSPACE.NOT_FOUND','directory':'WORKSPACE.NOT_FILE','escape':'WORKSPACE.ESCAPE','symlink':'WORKSPACE.SYMLINK'}[kind] in text
             return response('done')
         runner,url=await provider(chat);s=settings_at(tmp_path,url);h=None
         try:

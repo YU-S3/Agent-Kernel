@@ -4,7 +4,7 @@ from .common import tool, result, fail, emit
 
 
 async def file_apply(ctx,config):
-    async def describe(p,c): return [tool('read_file','Read a UTF-8 file in the authorized workspace',{'path':{'type':'string'}},['path'])]
+    async def describe(p,c): return [tool('read_file','Read an existing UTF-8 file by its relative path in the authorized workspace. This does not list directories; do not use "." as a filename.',{'path':{'type':'string'}},['path'])]
     async def execute(p,c):
         emit(ctx,'provider.executed',{'name':p['name']},c)
         data=await ctx.call('workspace','read',p['arguments'],parent=c)

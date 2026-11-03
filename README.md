@@ -25,6 +25,8 @@ Choose an **Agent 配置**, select tools and an optional workspace, enter a task
 
 For a benchmark, choose **任务来源 → SearchQA**, select an imported split, and set **起始题号 / 运行题数**. The recommended configuration is **Basic · 工具循环**. SearchQA supplies task-local `search_snippets` / `read_snippet` tools and a private EM/F1 scorer. Each question gets an independent session. Task progress, answers, usage, errors and histories appear above the same live plugin graph. **本题结束后暂停** checkpoints at a task boundary; **继续剩余题目** skips settled tasks. An interrupted uncertain question is recorded as an error and is never silently resent. See [benchmark adapters and data setup](docs/benchmarks.md).
 
+The event panel defaults to semantic events and assembled model responses; streaming fragments remain available in the raw-events view. Answer streaming continues independently. Replay batches fragments and draws once per animation tick; it does not resend requests.
+
 The dependency preview reflects the selected tools before execution. Actual execution events animate the graph; replay reads saved events without running plugins. Closing the page does not cancel a task. The server binds loopback and rejects cross-origin mutations.
 
 The answer pane renders Markdown and TeX in live output, saved answers and conversation history. Tool details are collapsed; **运行详情** opens the original envelope in the inspector. Rendering does not rewrite saved records. The pinned Markdown, sanitizer and math assets are shipped locally with their licenses and SHA256 manifest, so formatting needs no CDN connection.

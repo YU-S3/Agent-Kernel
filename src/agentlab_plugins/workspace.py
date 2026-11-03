@@ -20,7 +20,8 @@ async def apply(ctx, config):
         if not set(config.get('read_permissions',['tool:read_file'])) & set(ctx.authority(call)['permissions']): fail('WORKSPACE.DENIED')
         path = resolve(p['path'])
         try:
-            if not path.is_file(): fail('WORKSPACE.NOT_FOUND')
+            if not path.exists(): fail('WORKSPACE.NOT_FOUND')
+            if not path.is_file(): fail('WORKSPACE.NOT_FILE')
             if path.stat().st_size > 65536: fail('WORKSPACE.TOO_LARGE')
             return {'text':path.read_text(encoding='utf-8')}
         except UnicodeDecodeError: fail('WORKSPACE.NOT_UTF8')
