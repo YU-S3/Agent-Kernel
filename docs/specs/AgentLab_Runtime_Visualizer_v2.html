@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentLab Runtime Lens · Pan / Zoom / Drag</title>
+<style>
+:root{color-scheme:dark;--bg:#0b101b;--surface:#141d2e;--surface2:#1a273b;--stroke:#33445f;--text:#e7ecf5;--muted:#96a8c0;--blue:#70a8ff;--green:#4cd5b3;--orange:#f3bd75;--red:#f67f88}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 72% 10%,#152843 0%,#0b101b 58%);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}header{padding:16px 24px;border-bottom:1px solid #27364e;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font-size:19px;line-height:1.2;margin:0;letter-spacing:.2px}header p{margin:5px 0 0;color:var(--muted);font-size:12px}.tag{font-size:11px;color:#9fccff;background:#193654;padding:5px 9px;border-radius:18px;border:1px solid #345a83}.toolbar{display:flex;align-items:center;gap:9px;padding:12px 24px;flex-wrap:wrap;border-bottom:1px solid #22314a}.toolbar label{color:var(--muted);font-size:12px}button,select{border:1px solid #4b5e77;color:var(--text);background:#1b2a42;padding:8px 11px;border-radius:8px;cursor:pointer;font:inherit}button:hover{background:#263b58;border-color:#6c86a8}button.primary{background:#2457a0;border-color:#3477d5}button:disabled{opacity:.45;cursor:not-allowed}input[type=range]{width:96px;accent-color:#78adff}.layout{display:grid;grid-template-columns:minmax(300px,32%) minmax(450px,68%);min-height:calc(100vh - 140px)}.left{border-right:1px solid #26354c;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}.right{display:flex;flex-direction:column;min-width:0}.panel{background:#121c2d;border:1px solid #283b57;border-radius:12px;overflow:hidden}.panel h2{font-size:13px;margin:0;letter-spacing:.15px}.panelhead{padding:11px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #283b57;gap:8px}.sub{color:var(--muted);font-size:11px}.note{border:1px solid #375473;color:#bfd1e7;background:#17283f;border-radius:9px;padding:9px 11px;font-size:12px}textarea{display:block;width:100%;min-height:335px;resize:vertical;padding:12px;background:#0d1727;border:0;outline:0;color:#c8e0f5;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2}.status{font-size:12px;color:var(--green)}.status.err{color:var(--red)}.canvasbar{padding:12px 16px;border-bottom:1px solid #283b57;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.toggle{display:flex;gap:4px;background:#101a2b;padding:3px;border:1px solid #2d405d;border-radius:9px}.toggle button{font-size:11px;padding:6px 8px;border:none;background:transparent}.toggle button.active{background:#2a4568}.graphscroll{height:min(58vh,620px);min-height:440px;overflow:hidden;position:relative;background-image:radial-gradient(#2b3d56 0.75px,transparent .75px);background-size:23px 23px;cursor:grab;touch-action:none;user-select:none}.graphscroll.panning{cursor:grabbing}#graph{display:block;width:100%;height:100%;touch-action:none}.node{cursor:move}.node rect.main{fill:#18283e;stroke:#4a607e;stroke-width:1.35}.node:hover rect.main{stroke:#82b6ff}.node.running rect.main{stroke:#86baff;stroke-width:2.2;filter:drop-shadow(0 0 7px #527fb4)}.node.error rect.main{stroke:#f47e7e}.node.finished rect.main{stroke:#4dd9b4}.node text{fill:#dfeaf9;font:12px system-ui}.node text.small{font-size:10px;fill:#9eafc4}.node .dot{fill:#889bb4}.node.running .dot{fill:#83b9ff}.node.finished .dot{fill:#4bd2ae}.node.error .dot{fill:#f97c87}.line{fill:none;stroke:#526f95;stroke-width:1.6;opacity:.75}.line.live{stroke:#79b8ff;stroke-width:2.35;opacity:1;stroke-dasharray:7 6}.line.scope{stroke:#a88ad6;stroke-dasharray:5 5}.bottom{display:grid;grid-template-columns:1.1fr .9fr;min-height:260px;border-top:1px solid #283b57}.bottom>div{min-width:0}.bottom>div:first-child{border-right:1px solid #283b57}.events{height:230px;overflow:auto;padding:6px 10px}.event{display:flex;align-items:start;gap:9px;padding:7px;border-bottom:1px solid #24334b;font-size:12px;cursor:pointer}.event:hover{background:#1e2d43}.event b{font-weight:600;color:#cbe2fa}.event .index{flex:none;width:29px;color:#7a98bb;font:11px monospace}.event .ty{font-size:10px;padding:1px 6px;border-radius:5px;background:#203855;color:#a8c8ed;flex:none;max-width:95px;overflow:hidden;text-overflow:ellipsis}.details{padding:12px;height:230px;overflow:auto;color:#b7cae2;font-size:12px}.details pre{margin:7px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#d9eafa;background:#0c1624;padding:9px;border:1px solid #2c405e;border-radius:7px}.empty{color:#8196ae;font-size:12px;padding:12px}.legend{display:flex;gap:12px;color:#94acc7;font-size:11px;flex-wrap:wrap}.swatch{display:inline-block;width:13px;height:2px;vertical-align:middle;margin-right:5px;background:#526f95}.swatch.exec{background:#79b8ff}.swatch.scope{background:#a88ad6}.warn{color:#ffc58a}.viewporttools{display:flex;gap:5px;align-items:center;border-left:1px solid #33455b;padding-left:10px;margin-left:2px}.viewporttools button{font-size:12px;padding:6px 9px;min-width:30px}.zoomlabel{color:#a9c5e6;font:11px ui-monospace,monospace;min-width:43px;text-align:center}.graphhint{position:absolute;left:12px;bottom:11px;color:#a9bdd3;background:#0c1726db;border:1px solid #2b4360;border-radius:8px;font-size:11px;padding:5px 8px;pointer-events:none;z-index:2}footer{padding:10px 20px;color:#7893b2;font-size:11px;text-align:center;border-top:1px solid #283b57}@media(max-width:900px){.layout{grid-template-columns:1fr}.left{border-right:0;border-bottom:1px solid #26354c}.graphscroll{height:460px;min-height:380px}textarea{min-height:210px}}
+</style>
+</head>
+<body>
+<header><div><h1>AgentLab · Runtime Lens</h1><p>任意插件组合的通用执行图与数据流动画（独立模拟原型）</p></div><span class="tag">DATA-DRIVEN · 不预设 Agent / Model / Tool 节点类型</span></header>
+<div class="toolbar">
+  <label for="preset">测试场景</label><select id="preset"></select>
+  <button id="load">加载 JSON</button>
+  <button id="play" class="primary">▶ 自动执行</button>
+  <button id="pause">Ⅱ 暂停</button>
+  <button id="step">下一事件 →</button>
+  <button id="reset">重置</button>
+  <label for="speed">速度</label><input id="speed" type="range" min=".5" max="3" step=".5" value="1"><span id="speedValue" class="sub">1×</span>
+  <span id="progress" class="status">准备就绪</span>
+</div>
+<div class="layout">
+<aside class="left">
+  <div class="note">右侧图由下方 JSON 的 <b>instances / bindings / entry / events</b> 生成。可以任意改名、新增插件或修改调用顺序，然后点「加载 JSON」。事件为<b>模拟轨迹</b>，不是模型真实执行。</div>
+  <section class="panel"><div class="panelhead"><h2>Composition + 事件流</h2><span class="sub">可编辑 · 无硬编码节点类型</span></div><textarea id="config" spellcheck="false" aria-label="Composition JSON editor"></textarea></section>
+  <div id="parseInfo" class="status">已载入配置</div>
+  <div class="note"><b>真实系统接入位置：</b> Composition 快照 + Supervisor 通用 Execution 观察流 → VisualBridge → Web 图形投影。未开放内部事件的外部 Harness 只显示已观测部分。</div>
+</aside>
+<main class="right">
+  <div class="canvasbar"><div><b>插件拓扑与执行流</b><div id="entryLabel" class="sub"></div></div><div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap"><div class="toggle" id="toggles"><button data-mode="binding" class="active">装配依赖</button><button data-mode="execution">真实调用</button><button data-mode="scope">实例归属</button></div><label class="sub" style="display:flex;align-items:center;gap:4px;white-space:nowrap"><input id="autoFitSpawn" type="checkbox" checked>动态节点自动适配</label><div class="viewporttools" aria-label="图形视图控制"><button id="zoomOut" title="缩小">−</button><span id="zoomLabel" class="zoomlabel">100%</span><button id="zoomIn" title="放大">+</button><button id="fitGraph" title="适配全部节点">适配</button><button id="resetLayout" title="撤销节点手工布局">重排</button></div></div></div>
+  <div class="graphscroll" id="graphViewport"><div class="graphhint">拖动空白区平移 · 拖动节点调整位置 · 滚轮缩放 ·「适配」显示全部</div><svg id="graph" xmlns="http://www.w3.org/2000/svg" aria-label="Draggable and zoomable plugin graph"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0 0 L7 3 L0 6 Z" fill="#7390b1"/></marker></defs><g id="edges"></g><g id="nodes"></g><g id="particles"></g></svg></div>
+  <div style="padding:8px 15px;border-top:1px solid #25364d" class="legend"><span><i class="swatch"></i>实例依赖</span><span><i class="swatch exec"></i>真实调用</span><span><i class="swatch scope"></i>资源归属</span><span>蓝色光点 = 调用参数 / 返回结果移动</span><span>图形拖动和缩放仅影响 UI，绝不改变插件绑定</span></div>
+  <div class="bottom">
+    <div><div class="panelhead"><h2>执行时间线</h2><span class="sub" id="counter">0 条</span></div><div id="events" class="events"><div class="empty">运行模拟事件后将显示记录</div></div></div>
+    <div><div class="panelhead"><h2>组件 / 调用详情</h2><span class="sub">选择图中节点或时间线</span></div><div id="details" class="details"><div class="empty">点击某个插件节点查看其版本、绑定和导出，或查看执行事件的输入输出摘要。</div></div></div>
+  </div>
+</main>
+</div>
+<footer>离线演示 · 不调用网络或模型 · 模拟事件与实际 Kernel Execution/业务事件须在真实系统中通过只读桥接替换</footer>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const PRESETS={
+ 'BasicLoop · 工具闭环':{
+  entry:{instance:'loop',method:'run'},
+  instances:{loop:{plugin:'agentlab.basic-loop',version:'0.1.0',bindings:{model:'model',tools:'tools',history:'history',context:'context'}},model:{plugin:'model.mock',version:'1.0.0'},tools:{plugin:'tools.registry',version:'1.0.0',bindings:{reader:'read_file'}},read_file:{plugin:'tool.read-file',version:'1.0.0'},history:{plugin:'history.memory',version:'1.0.0'},context:{plugin:'context.full',version:'1.0.0',bindings:{history:'history'}}},
+  events:[
+   {type:'call.start',from:'loop',to:'history',method:'append',input:'用户：统计 data.txt 行数'},
+   {type:'call.end',from:'history',to:'loop',method:'append',output:'已存储用户消息'},
+   {type:'call.start',from:'loop',to:'context',method:'build',input:'session-1'},
+   {type:'call.start',from:'context',to:'history',method:'read',input:'session-1'},
+   {type:'call.end',from:'history',to:'context',method:'read',output:'历史 1 条'},
+   {type:'call.end',from:'context',to:'loop',method:'build',output:'模型消息 1 条'},
+   {type:'call.start',from:'loop',to:'model',method:'infer',input:'读文件任务 + read_file schema'},
+   {type:'call.end',from:'model',to:'loop',method:'infer',output:'tool_call: read_file(data.txt)'},
+   {type:'call.start',from:'loop',to:'tools',method:'execute',input:'read_file(data.txt)'},
+   {type:'call.start',from:'tools',to:'read_file',method:'run',input:'data.txt'},
+   {type:'call.end',from:'read_file',to:'tools',method:'run',output:'文本 3 行'},
+   {type:'call.end',from:'tools',to:'loop',method:'execute',output:'observation: 三行文本'},
+   {type:'call.start',from:'loop',to:'history',method:'append',input:'tool_result call-1'},
+   {type:'call.end',from:'history',to:'loop',method:'append',output:'工具结果已记录'},
+   {type:'call.start',from:'loop',to:'model',method:'infer',input:'含工具观察的消息'},
+   {type:'call.end',from:'model',to:'loop',method:'infer',output:'final: 共 3 行'},
+   {type:'node.finish',target:'loop',message:'最终回答：共 3 行'}
+  ]},
+ 'Multi-Agent · 共享 Provider':{
+  entry:{instance:'team',method:'run'},
+  instances:{team:{plugin:'agent.parallel',version:'0.1',bindings:{first:'agent_1',second:'agent_2'}},agent_1:{plugin:'agentlab.basic-loop',bindings:{model:'model_shared',history:'history_1'}},agent_2:{plugin:'agentlab.basic-loop',bindings:{model:'model_shared',history:'history_2'}},model_shared:{plugin:'model.mock',version:'1.0'},history_1:{plugin:'history.memory',version:'1.0',owner:'agent_1'},history_2:{plugin:'history.memory',version:'1.0',owner:'agent_2'}},
+  events:[
+   {type:'call.start',from:'team',to:'agent_1',method:'run',input:'任务 A'},
+   {type:'call.start',from:'team',to:'agent_2',method:'run',input:'任务 B'},
+   {type:'call.start',from:'agent_1',to:'model_shared',method:'infer',input:'问题 A'},
+   {type:'call.start',from:'agent_2',to:'model_shared',method:'infer',input:'问题 B'},
+   {type:'progress',target:'model_shared',message:'两个并行请求使用同一个 Provider'},
+   {type:'call.end',from:'model_shared',to:'agent_2',method:'infer',output:'答案 B'},
+   {type:'call.start',from:'agent_2',to:'history_2',method:'append',input:'保存答案 B'},
+   {type:'call.end',from:'history_2',to:'agent_2',method:'append',output:'已写入 B 私有历史'},
+   {type:'call.end',from:'model_shared',to:'agent_1',method:'infer',output:'答案 A'},
+   {type:'call.start',from:'agent_1',to:'history_1',method:'append',input:'保存答案 A'},
+   {type:'call.end',from:'history_1',to:'agent_1',method:'append',output:'已写入 A 私有历史'},
+   {type:'call.end',from:'agent_1',to:'team',method:'run',output:'任务 A 完成'},
+   {type:'call.end',from:'agent_2',to:'team',method:'run',output:'任务 B 完成'},
+   {type:'node.finish',target:'team',message:'两 Agent 结果汇总'}
+  ]},
+ '记忆替换 · Window Context':{
+  entry:{instance:'agent',method:'run'},
+  instances:{agent:{plugin:'agentlab.basic-loop',bindings:{model:'provider',history:'storage',context:'window'}},provider:{plugin:'model.mock'},storage:{plugin:'history.sqlite',version:'0.1.0'},window:{plugin:'context.window',version:'0.1.0',bindings:{history:'storage'}}},
+  events:[
+   {type:'call.start',from:'agent',to:'storage',method:'append',input:'保存完整事实 1..30'},
+   {type:'call.end',from:'storage',to:'agent',method:'append',output:'SQLite 持久存储成功'},
+   {type:'call.start',from:'agent',to:'window',method:'build',input:'构建最近 5 条的模型上下文'},
+   {type:'call.start',from:'window',to:'storage',method:'read',input:'历史全部 30 条'},
+   {type:'call.end',from:'storage',to:'window',method:'read',output:'返回历史全部 30 条'},
+   {type:'call.end',from:'window',to:'agent',method:'build',output:'仅选择最近 5 条，不删除原始事实'},
+   {type:'call.start',from:'agent',to:'provider',method:'infer',input:'窗口化后的模型上下文'},
+   {type:'call.end',from:'provider',to:'agent',method:'infer',output:'final: 已完成'},
+   {type:'node.finish',target:'agent',message:'历史仍然完整保存'}
+  ]},
+ 'Plan–Execute · 更换执行架构':{
+  entry:{instance:'root',method:'execute'},
+  instances:{root:{plugin:'agent.plan-execute',version:'0.1',bindings:{planner:'planner',executor:'executor',verifier:'verifier'}},planner:{plugin:'module.planner',bindings:{model:'provider'}},executor:{plugin:'module.executor',bindings:{tools:'toolbox'}},verifier:{plugin:'module.verifier',bindings:{model:'provider'}},provider:{plugin:'model.mock'},toolbox:{plugin:'tools.registry'}},
+  events:[
+   {type:'call.start',from:'root',to:'planner',method:'plan',input:'制定执行计划'},
+   {type:'call.start',from:'planner',to:'provider',method:'infer',input:'规划指令'},
+   {type:'call.end',from:'provider',to:'planner',method:'infer',output:'计划: 先读取，再校验'},
+   {type:'call.end',from:'planner',to:'root',method:'plan',output:'2 步计划'},
+   {type:'call.start',from:'root',to:'executor',method:'execute',input:'步骤一'},
+   {type:'call.start',from:'executor',to:'toolbox',method:'execute',input:'具体动作'},
+   {type:'call.end',from:'toolbox',to:'executor',method:'execute',output:'观察结果'},
+   {type:'call.end',from:'executor',to:'root',method:'execute',output:'已执行'},
+   {type:'call.start',from:'root',to:'verifier',method:'verify',input:'实际结果'},
+   {type:'call.end',from:'verifier',to:'root',method:'verify',output:'验证通过'},
+   {type:'node.finish',target:'root',message:'Plan-Execute 完成'}
+  ]},
+ '动态 Spawn · 不预先定义新 Agent':{
+  entry:{instance:'supervisor_app',method:'run'},
+  instances:{supervisor_app:{plugin:'agent.dynamic-orchestrator',bindings:{factory:'factory'}},factory:{plugin:'agent.factory'}},
+  events:[
+   {type:'call.start',from:'supervisor_app',to:'factory',method:'spawn_instance',input:'创建独立 Agent'},
+   {type:'call.end',from:'factory',to:'supervisor_app',method:'spawn_instance',output:'InstanceHandle child_agent'},
+   {type:'instance.spawn',instance:'child_agent',plugin:'agent.custom-new-driver',owner:'supervisor_app',bindings:{model:'mock_new'}},
+   {type:'instance.spawn',instance:'mock_new',plugin:'model.mock',owner:'supervisor_app'},
+   {type:'call.start',from:'supervisor_app',to:'child_agent',method:'run_anything',input:'新 Agent 的工作负载'},
+   {type:'call.start',from:'child_agent',to:'mock_new',method:'generate',input:'问候'},
+   {type:'call.end',from:'mock_new',to:'child_agent',method:'generate',output:'Hello'},
+   {type:'call.end',from:'child_agent',to:'supervisor_app',method:'run_anything',output:'完成'},
+   {type:'node.finish',target:'supervisor_app',message:'动态 Agent 已收尾'}
+  ]},
+ '外部 Harness · 只展示可观测边界':{
+  entry:{instance:'external',method:'run'},
+  instances:{external:{plugin:'harness.external-adapter',version:'0.1',bindings:{worker:'remote_worker'}},remote_worker:{plugin:'runtime.jsonrpc-worker',version:'1.0'}},
+  events:[
+   {type:'call.start',from:'external',to:'remote_worker',method:'invoke',input:'完整任务交给外部 Harness'},
+   {type:'progress',target:'remote_worker',message:'外部 Runner 报告进度（只显示实际公开信息）'},
+   {type:'call.end',from:'remote_worker',to:'external',method:'invoke',output:'外部执行完成，内部步骤未观测'},
+   {type:'node.finish',target:'external',message:'结果已返回'}
+  ]}
+
+,
+ '工具注册 + Sandbox · 完整 ToolCall':{
+  entry:{instance:'agent',method:'run'},
+  instances:{agent:{plugin:'agent.basic-loop',bindings:{model:'mock',tools:'registry',history:'facts'}},mock:{plugin:'model.mock'},registry:{plugin:'tools.registry',bindings:{file:'filetool',shell:'shelltool',policy:'policy'}},filetool:{plugin:'tool.file',bindings:{workspace:'workspace'}},shelltool:{plugin:'tool.shell',bindings:{sandbox:'sandbox'}},sandbox:{plugin:'sandbox.container',bindings:{workspace:'workspace'}},workspace:{plugin:'workspace.fixture'},facts:{plugin:'history.memory'},policy:{plugin:'tools.policy.basic'}},
+  events:[
+   {type:'call.start',from:'registry',to:'filetool',method:'describe',input:'ready: 注册 read_file'},
+   {type:'call.end',from:'filetool',to:'registry',method:'describe',output:'read_file Schema'},
+   {type:'call.start',from:'registry',to:'shelltool',method:'describe',input:'ready: 注册 shell'},
+   {type:'call.end',from:'shelltool',to:'registry',method:'describe',output:'shell Schema'},
+   {type:'call.start',from:'agent',to:'mock',method:'infer',input:'任务 + 工具目录'},
+   {type:'call.end',from:'mock',to:'agent',method:'infer',output:'tool_call id=tc-1 shell(wc -l data.txt)'},
+   {type:'call.start',from:'agent',to:'registry',method:'execute',input:'tc-1: shell'},
+   {type:'call.start',from:'registry',to:'policy',method:'authorize',input:'shell in current scope'},
+   {type:'call.end',from:'policy',to:'registry',method:'authorize',output:'allow'},
+   {type:'call.start',from:'registry',to:'shelltool',method:'execute',input:'wc -l data.txt'},
+   {type:'call.start',from:'shelltool',to:'sandbox',method:'run',input:'隔离进程执行 (网络禁止)'},
+   {type:'call.start',from:'sandbox',to:'workspace',method:'open',input:'read-only data.txt'},
+   {type:'call.end',from:'workspace',to:'sandbox',method:'open',output:'fixture directory'},
+   {type:'call.end',from:'sandbox',to:'shelltool',method:'run',output:'exit_code=0 stdout=3'},
+   {type:'call.end',from:'shelltool',to:'registry',method:'execute',output:'ToolResult id=tc-1'},
+   {type:'call.end',from:'registry',to:'agent',method:'execute',output:'Observation 3 行'},
+   {type:'call.start',from:'agent',to:'facts',method:'append',input:'ToolResult(tc-1)'},
+   {type:'call.end',from:'facts',to:'agent',method:'append',output:'saved'},
+   {type:'call.start',from:'agent',to:'mock',method:'infer',input:'观察已入历史'},
+   {type:'call.end',from:'mock',to:'agent',method:'infer',output:'final: 三行'},
+   {type:'node.finish',target:'agent',message:'Tool/Sandbox 闭环完成'}
+  ]},
+ '父子 Agent · 委派和共享模型':{
+  entry:{instance:'parent',method:'run'},
+  instances:{parent:{plugin:'agent.basic-loop',bindings:{model:'shared_model',tools:'registry',history:'parent_history'}},registry:{plugin:'tools.registry',bindings:{delegate:'delegate_tool'}},delegate_tool:{plugin:'tool.delegate-agent',bindings:{manager:'manager'}},manager:{plugin:'subagent.manager',bindings:{child_template:'child',model:'shared_model'}},child:{plugin:'agent.basic-loop',owner:'manager',bindings:{model:'shared_model',history:'child_history'}},shared_model:{plugin:'model.mock'},parent_history:{plugin:'history.memory',owner:'parent'},child_history:{plugin:'history.memory',owner:'child'}},
+  events:[
+   {type:'call.start',from:'parent',to:'shared_model',method:'infer',input:'需要核查的任务'},
+   {type:'call.end',from:'shared_model',to:'parent',method:'infer',output:'tool_call delegate_agent'},
+   {type:'call.start',from:'parent',to:'registry',method:'execute',input:'delegate_agent(task)'},
+   {type:'call.start',from:'registry',to:'delegate_tool',method:'execute',input:'任务交给子 Agent'},
+   {type:'call.start',from:'delegate_tool',to:'manager',method:'delegate',input:'child template'},
+   {type:'call.start',from:'manager',to:'child',method:'run',input:'子任务：统计文件内容'},
+   {type:'call.start',from:'child',to:'shared_model',method:'infer',input:'子 Agent 只读取授权工具'},
+   {type:'call.end',from:'shared_model',to:'child',method:'infer',output:'child final: 3 行'},
+   {type:'call.start',from:'child',to:'child_history',method:'append',input:'保存子 Agent 结果'},
+   {type:'call.end',from:'child_history',to:'child',method:'append',output:'saved'},
+   {type:'call.end',from:'child',to:'manager',method:'run',output:'child result'},
+   {type:'call.end',from:'manager',to:'delegate_tool',method:'delegate',output:'子执行完成'},
+   {type:'call.end',from:'delegate_tool',to:'registry',method:'execute',output:'delegate result'},
+   {type:'call.end',from:'registry',to:'parent',method:'execute',output:'ToolResult for delegate_agent'},
+   {type:'call.start',from:'parent',to:'parent_history',method:'append',input:'委派结果'},
+   {type:'call.end',from:'parent_history',to:'parent',method:'append',output:'saved'},
+   {type:'call.start',from:'parent',to:'shared_model',method:'infer',input:'带委派结果继续推理'},
+   {type:'call.end',from:'shared_model',to:'parent',method:'infer',output:'final'},
+   {type:'node.finish',target:'parent',message:'父 Agent 完成'}
+  ]}
+
+};
+let model=null, originalModel=null, cursor=0, timer=null, playing=false, mode='binding';
+let nodeStates={}, activeCounts={}, observedCalls=new Map(), visualPosition={}, layoutPositions={}, manualPositions={};
+let camera={x:0,y:0,w:940,h:520}, cameraReady=false, pointerState=null, sceneGeneration=0;
+const NODE_W=176,NODE_H=70;
+const svg=$('graph');
+function getInstance(id){return model?.instances?.[id]}
+function format(v){if(v===undefined)return '';if(typeof v==='string')return v;return JSON.stringify(v,null,2)}
+function status(t,msg){$('progress').textContent=msg;$('progress').classList.toggle('err',t==='err')}
+function setPreset(k){$('config').value=JSON.stringify(PRESETS[k],null,2);loadConfig()}
+function loadConfig(){try{const parsed=JSON.parse($('config').value);if(!parsed.instances||typeof parsed.instances!=='object')throw new Error('需要 instances 对象');for(const [id,c] of Object.entries(parsed.instances)){if(!c||typeof c!=='object')throw new Error(id+' 定义无效');for(const dep of Object.values(c.bindings||{})){if(!parsed.instances[dep])throw new Error(`${id} 的绑定目标 ${dep} 不存在`);}}if(!Array.isArray(parsed.events))throw new Error('需要 events 数组');originalModel=structuredClone(parsed);reset();status('ok',`已加载 ${Object.keys(model.instances).length} 个插件实例 · ${model.events.length} 个模拟事件`);$('parseInfo').textContent='JSON 有效，当前观察图由实例及事件生成';$('parseInfo').className='status';}catch(e){status('err','配置错误');$('parseInfo').textContent='JSON 错误：'+e.message;$('parseInfo').className='status err';}}
+function reset(){stop();model=originalModel?structuredClone(originalModel):null;cursor=0;nodeStates={};activeCounts={};observedCalls.clear();layoutPositions={};manualPositions={};cameraReady=false;sceneGeneration++;$('events').replaceChildren();$('details').textContent='点击节点或执行事件查看动态详情';$('entryLabel').textContent=model?.entry?`入口：${model.entry.instance}.${model.entry.method}`:'无默认入口（仅装载模式）';updateProgress();renderGraph({fit:true});}
+function stop(){playing=false;if(timer){clearTimeout(timer);timer=null}}
+function updateProgress(){$('counter').textContent=`${cursor}/${model?.events?.length||0} 事件`}
+function nodesEdges(){const instances=model.instances;const names=Object.keys(instances), edges=[];
+for(const [id,v] of Object.entries(instances)){
+ if(mode==='scope'){if(v.owner&&instances[v.owner])edges.push({from:v.owner,to:id,label:'owns',kind:'scope'});}
+ else if(mode==='binding'){for(const [alias,dst] of Object.entries(v.bindings||{}))edges.push({from:id,to:dst,label:alias,kind:'binding'});}
+}
+if(mode==='execution'){for(const v of observedCalls.values()){if(instances[v.from]&&instances[v.to])edges.push({from:v.from,to:v.to,label:v.method||'',kind:'execution'});}}
+return {names,edges};}
+function arrange(names){const root=model.entry?.instance||names[0];if(!names.length)return {};
+const ranks=new Map(),queue=[root];ranks.set(root,0);
+const graphEdges=Object.entries(model.instances).flatMap(([id,v])=>Object.values(v.bindings||{}).map(to=>({from:id,to})));
+while(queue.length){const cur=queue.shift();for(const edge of graphEdges)if(edge.from===cur&&!ranks.has(edge.to)){ranks.set(edge.to,ranks.get(cur)+1);queue.push(edge.to)}}
+const maxRank=Math.max(0,...ranks.values());for(const n of names)if(!ranks.has(n))ranks.set(n,maxRank+1);
+const groups={};for(const n of names)(groups[ranks.get(n)]??=[]).push(n);
+for(const [r,ids] of Object.entries(groups)){
+ const height=Math.max(460,ids.length*116+95),stride=height/(ids.length+1);
+ ids.forEach((id,i)=>{
+  if(layoutPositions[id])return;
+  const base={x:72+Number(r)*262,y:stride*(i+1)-NODE_H/2};
+  for(let j=0;j<40;j++){
+   const occupied=Object.values(layoutPositions).some(p=>Math.abs(p.x-base.x)<NODE_W+12&&Math.abs(p.y-base.y)<NODE_H+26);
+   if(!occupied)break;base.y+=104;
+  }
+  layoutPositions[id]=base;
+ });
+}
+const out={};for(const id of names)out[id]=manualPositions[id]||layoutPositions[id];return out;
+}
+const NS='http://www.w3.org/2000/svg';function sv(tag,attrs={}){const x=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))x.setAttribute(k,String(v));return x}
+function txt(s,x,y,cls){const el=sv('text',{x,y,class:cls||''});el.textContent=s;return el}
+function route(from,to){const a=visualPosition[from],b=visualPosition[to];if(!a||!b)return null;const right=b.x>a.x;const x1=right?a.x+NODE_W:a.x,x2=right?b.x:b.x+NODE_W;const y1=a.y+NODE_H/2,y2=b.y+NODE_H/2,k=Math.min(95,Math.abs(x2-x1)*.48);return {p:`M${x1},${y1} C${x1+(right?k:-k)},${y1} ${x2+(right?-k:k)},${y2} ${x2},${y2}`,p0:{x:x1,y:y1},p1:{x:x1+(right?k:-k),y:y1},p2:{x:x2+(right?-k:k),y:y2},p3:{x:x2,y:y2}}}
+function graphSize(){const r=svg.getBoundingClientRect();return {w:Math.max(200,r.width),h:Math.max(200,r.height)}}
+function updateCamera(){svg.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);$('zoomLabel').textContent=`${Math.round(100*graphSize().w/camera.w)}%`}
+function fitGraph(){if(!model)return;const pts=Object.values(visualPosition);if(!pts.length){camera={x:0,y:0,w:960,h:520};cameraReady=true;updateCamera();return;}
+const margin=78,minX=Math.min(...pts.map(p=>p.x))-margin,maxX=Math.max(...pts.map(p=>p.x+NODE_W))+margin;
+const minY=Math.min(...pts.map(p=>p.y))-margin,maxY=Math.max(...pts.map(p=>p.y+NODE_H))+margin;
+const view=graphSize();const scale=Math.max((maxX-minX)/view.w,(maxY-minY)/view.h,0.3);
+camera={x:(minX+maxX)/2-view.w*scale/2,y:(minY+maxY)/2-view.h*scale/2,w:view.w*scale,h:view.h*scale};cameraReady=true;updateCamera();}
+function zoomAt(factor,clientX,clientY){const rect=svg.getBoundingClientRect();if(!rect.width||!rect.height)return;
+const anchorX=(clientX-rect.left)/rect.width,anchorY=(clientY-rect.top)/rect.height;
+const nextW=Math.max(rect.width/3.5,Math.min(rect.width*12,camera.w*factor));
+const nextH=nextW*rect.height/rect.width;
+const worldX=camera.x+camera.w*anchorX,worldY=camera.y+camera.h*anchorY;
+camera={x:worldX-nextW*anchorX,y:worldY-nextH*anchorY,w:nextW,h:nextH};cameraReady=true;updateCamera();}
+function renderGraph(opts={}){if(!model)return;const {names,edges}=nodesEdges();visualPosition=arrange(names);
+$('edges').replaceChildren();$('nodes').replaceChildren();$('particles').replaceChildren();sceneGeneration++;
+for(const e of edges){let r=route(e.from,e.to);if(!r)continue;const p=sv('path',{d:r.p,class:'line '+(e.kind==='execution'?'live':e.kind==='scope'?'scope':''),'marker-end':'url(#arrow)'});$('edges').append(p);if(mode==='binding'){const mid=(r.p0.x+r.p3.x)/2,ymid=(r.p0.y+r.p3.y)/2,t=txt(e.label,mid,ymid-8,'small');t.setAttribute('text-anchor','middle');t.setAttribute('fill','#8fa6c3');t.setAttribute('font-size','10');$('edges').append(t);}}
+for(const id of names){const v=model.instances[id],p=visualPosition[id];const g=sv('g',{class:'node '+(nodeStates[id]||''),'data-id':id,transform:`translate(${p.x},${p.y})`});g.append(sv('rect',{class:'main',x:0,y:0,width:NODE_W,height:NODE_H,rx:11}));g.append(sv('circle',{class:'dot',cx:15,cy:18,r:5}));g.append(txt(id.length>21?id.slice(0,20)+'…':id,28,22,''));const plugin=v.plugin||'unnamed';g.append(txt(plugin.length>27?plugin.slice(0,26)+'…':plugin,14,44,'small'));g.append(txt((v.version?'@'+v.version+' · ':'')+(nodeStates[id]||'idle'),14,60,'small'));if(model.entry?.instance===id){g.append(sv('rect',{x:113,y:7,width:55,height:17,rx:8,fill:'#294d78'}));const tr=txt('ENTRY',140,19,'small');tr.setAttribute('text-anchor','middle');g.append(tr)}$('nodes').append(g)}
+if(opts.fit||!cameraReady)fitGraph();else updateCamera();}
+function inspectNode(id){const v=getInstance(id);if(!v)return;$('details').replaceChildren();const h=document.createElement('b');h.textContent=id;$('details').append(h);const p=document.createElement('pre');p.textContent=JSON.stringify({plugin:v.plugin,version:v.version||'未指定',owner:v.owner||null,bindings:v.bindings||{},state:nodeStates[id]||'idle',position:manualPositions[id]||null},null,2);$('details').append(p)}
+function inspectEvent(ev,index){$('details').replaceChildren();const h=document.createElement('b');h.textContent=`#${index+1} ${ev.type}`;$('details').append(h);const p=document.createElement('pre');p.textContent=JSON.stringify(ev,null,2);$('details').append(p)}
+function addLog(ev,index){const div=document.createElement('div');div.className='event';const num=document.createElement('span');num.className='index';num.textContent='#'+String(index+1).padStart(2,'0');const ty=document.createElement('span');ty.className='ty';ty.textContent=ev.type;const t=document.createElement('span');const b=document.createElement('b');b.textContent=(ev.from?ev.from+' → ':'')+(ev.to||ev.target||ev.instance||'');t.append(b);const d=document.createElement('span');d.textContent=` · ${ev.method||ev.message||format(ev.output)||format(ev.input)||''}`;t.append(d);div.append(num,ty,t);div.onclick=()=>inspectEvent(ev,index);$('events').append(div);$('events').scrollTop=$('events').scrollHeight}
+function bez(a,b,c,d,t){let q=1-t;return q*q*q*a+3*q*q*t*b+3*q*q*t*t*c+t*t*t*d}
+function pulse(from,to){const r=route(from,to);if(!r)return;let circle=sv('circle',{r:5,fill:'#b8d9ff',filter:'drop-shadow(0px 0px 6px #79b8ff)',cx:r.p0.x,cy:r.p0.y});$('particles').append(circle);const dur=530/Number($('speed').value),start=performance.now(),scene=sceneGeneration;
+function frame(now){if(scene!==sceneGeneration||!circle.isConnected)return;let t=Math.min(1,(now-start)/dur);circle.setAttribute('cx',bez(r.p0.x,r.p1.x,r.p2.x,r.p3.x,t));circle.setAttribute('cy',bez(r.p0.y,r.p1.y,r.p2.y,r.p3.y,t));if(t<1)requestAnimationFrame(frame);else circle.remove()}requestAnimationFrame(frame)}
+function applyEvent(ev,i){const oldCount=Object.keys(model.instances).length;
+if(ev.type==='instance.spawn'){model.instances[ev.instance]={plugin:ev.plugin||'generic.plugin',version:ev.version||'0.1',owner:ev.owner,bindings:ev.bindings||{}};nodeStates[ev.instance]='idle'}
+if(ev.type==='call.start'){activeCounts[ev.to]=(activeCounts[ev.to]||0)+1;nodeStates[ev.to]='running';observedCalls.set(`${ev.from}/${ev.to}/${ev.method}`,{from:ev.from,to:ev.to,method:ev.method})}
+if(ev.type==='call.end'){activeCounts[ev.from]=Math.max(0,(activeCounts[ev.from]||0)-1);nodeStates[ev.from]=activeCounts[ev.from]>0?'running':'finished';observedCalls.set(`${ev.to}/${ev.from}/${ev.method}`,{from:ev.to,to:ev.from,method:ev.method})}
+if(ev.type==='node.finish')nodeStates[ev.target]='finished';if(ev.type==='error')nodeStates[ev.target]='error';if(ev.type==='progress')nodeStates[ev.target]='running';
+renderGraph();if(ev.from&&ev.to)pulse(ev.from,ev.to);addLog(ev,i);inspectEvent(ev,i);
+if(Object.keys(model.instances).length>oldCount&&$('autoFitSpawn').checked)fitGraph();}
+function nextStep(){if(!model||cursor>=model.events.length){stop();status('ok','模拟结束');return false}const i=cursor++,ev=model.events[i];applyEvent(ev,i);updateProgress();status('ok',`正在展示 ${cursor}/${model.events.length}`);if(cursor>=model.events.length){stop();status('ok',`模拟完成，共 ${cursor} 条事件`)}return true}
+function play(){if(!model)return;stop();playing=true;function loop(){if(!playing)return;const cont=nextStep();if(cont&&playing&&cursor<model.events.length)timer=setTimeout(loop,850/Number($('speed').value))}loop()}
+for(const name of Object.keys(PRESETS)){const o=document.createElement('option');o.value=name;o.textContent=name;$('preset').append(o)}
+$('preset').addEventListener('change',e=>setPreset(e.target.value));$('load').onclick=loadConfig;$('play').onclick=play;$('pause').onclick=()=>{stop();status('ok','已暂停')};$('step').onclick=()=>{stop();nextStep()};$('reset').onclick=reset;$('speed').oninput=()=>{$('speedValue').textContent=$('speed').value+'×'};
+$('toggles').addEventListener('click',e=>{const target=e.target.closest('button[data-mode]');if(!target)return;mode=target.dataset.mode;for(const b of $('toggles').querySelectorAll('button'))b.classList.toggle('active',b===target);renderGraph()});
+$('fitGraph').onclick=fitGraph;
+$('resetLayout').onclick=()=>{manualPositions={};layoutPositions={};renderGraph({fit:true});status('ok','已恢复自动布局并适配全部节点')};
+$('zoomIn').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(0.8,r.left+r.width/2,r.top+r.height/2)};
+$('zoomOut').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(1.25,r.left+r.width/2,r.top+r.height/2)};
+svg.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.deltaY>0?1.13:0.885,e.clientX,e.clientY)},{passive:false});
+svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const node=e.target.closest?.('g.node');const id=node?.dataset?.id||null;
+pointerState={id,mode:id?'node':'pan',pointerId:e.pointerId,x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,originX:camera.x,originY:camera.y,nodeX:id?visualPosition[id].x:0,nodeY:id?visualPosition[id].y:0,moved:false};
+svg.setPointerCapture(e.pointerId);if(!id)$('graphViewport').classList.add('panning');});
+svg.addEventListener('pointermove',e=>{const st=pointerState;if(!st||e.pointerId!==st.pointerId)return;
+const dx=e.clientX-st.x,dy=e.clientY-st.y,rect=svg.getBoundingClientRect();
+if(Math.hypot(dx,dy)>3)st.moved=true;
+if(st.mode==='pan'){
+ camera.x=st.originX-dx*(camera.w/rect.width);camera.y=st.originY-dy*(camera.h/rect.height);cameraReady=true;updateCamera();
+}else if(st.moved&&st.id){manualPositions[st.id]={x:st.nodeX+dx*(camera.w/rect.width),y:st.nodeY+dy*(camera.h/rect.height)};renderGraph()}
+});
+function finishPointer(e){const st=pointerState;if(!st||st.pointerId!==e.pointerId)return;pointerState=null;$('graphViewport').classList.remove('panning');if(st.mode==='node'&&!st.moved)inspectNode(st.id);if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId)}
+svg.addEventListener('pointerup',finishPointer);svg.addEventListener('pointercancel',finishPointer);
+svg.addEventListener('dblclick',e=>{if(!e.target.closest?.('g.node'))fitGraph()});
+window.addEventListener('resize',()=>{if(!cameraReady)return;const {w,h}=graphSize();const cx=camera.x+camera.w/2,cy=camera.y+camera.h/2;camera.h=camera.w*h/w;camera.x=cx-camera.w/2;camera.y=cy-camera.h/2;updateCamera()});
+setPreset(Object.keys(PRESETS)[0]);
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+{
+  "type": "object",
+  "required": [
+    "kernel_api",
+    "composition",
+    "packages",
+    "instances"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kernel_api": {
+      "const": 1
+    },
+    "composition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "digest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "instances": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "plugin"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "plugin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "config": {
+            "type": "object"
+          },
+          "execution": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "isolation": {
+                "enum": [
+                  "local",
+                  "process"
+                ]
+              },
+              "backend": {
+                "enum": [
+                  "local",
+                  "docker"
+                ]
+              },
+              "image": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "max_inflight": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reentrant": {
+                "type": "boolean"
+              },
+              "max_queue": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "control": {
+            "type": "object"
+          },
+          "bindings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        }
+      }
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "plugin"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "plugin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "config": {
+            "type": "object"
+          },
+          "execution": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "isolation": {
+                "enum": [
+                  "local",
+                  "process"
+                ]
+              },
+              "backend": {
+                "enum": [
+                  "local",
+                  "docker"
+                ]
+              },
+              "image": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "max_inflight": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reentrant": {
+                "type": "boolean"
+              },
+              "max_queue": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "control": {
+            "type": "object"
+          },
+          "bindings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        }
+      }
+    },
+    "control": {
+      "type": "object"
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "instance",
+        "method"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "instance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

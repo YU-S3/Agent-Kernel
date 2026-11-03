@@ -1,0 +1,27 @@
+{
+  "kernel_api": 1,
+  "composition": "external-demo",
+  "packages": [
+    {
+      "id": "example.external",
+      "version": "1.0.0",
+      "digest": "sha256:acea0aa6f2778ab90304627780c86168cdcb9d5d53271cbcf8a6cc704444b0dd"
+    }
+  ],
+  "instances": {
+    "harness": {
+      "plugin": "example.external",
+      "execution": {
+        "isolation": "process",
+        "backend": "local"
+      },
+      "control": {
+        "network": "inherit"
+      }
+    }
+  },
+  "entry": {
+    "instance": "harness",
+    "method": "run"
+  }
+}

@@ -1,0 +1,23 @@
+name: kernel-and-reference-plugins
+on: [push, pull_request]
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -e '.[dev]'
+      - run: docker pull python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+      - run: pytest -q -k 'not AG13'
+      - run: agentlab run --profile viz-basic --report-dir runs/ci-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-evidence
+          path: runs/
+# AG13 is a separate real-browser/source-digest gate; this job does not claim full UI acceptance.

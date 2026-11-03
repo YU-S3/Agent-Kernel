@@ -1,0 +1,35 @@
+{
+  "kernel_api": 1,
+  "composition": "basic",
+  "packages": [
+    {
+      "id": "example.services",
+      "version": "1.0.0",
+      "digest": "sha256:05d323e624bc7493e4ea27ecbf80903166d9493e4ee3a12aa6bdd84feebff1f6"
+    },
+    {
+      "id": "example.basic_loop",
+      "version": "1.0.0",
+      "digest": "sha256:2044c92c268bb2bb9727f8163d6b88992926b9054d4ce0606a7d777d53ede872"
+    }
+  ],
+  "instances": {
+    "agent": {
+      "plugin": "example.basic_loop",
+      "bindings": {
+        "model": "model",
+        "tools": "tools"
+      }
+    },
+    "model": {
+      "plugin": "example.services"
+    },
+    "tools": {
+      "plugin": "example.services"
+    }
+  },
+  "entry": {
+    "instance": "agent",
+    "method": "run"
+  }
+}

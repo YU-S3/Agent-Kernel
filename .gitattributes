@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Preserve generated diagnostic whitespace in the historical failing test receipt.
+research/v1-phase-tests.xml -whitespace

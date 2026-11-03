@@ -1,0 +1,38 @@
+{
+  "kernel_api": 1,
+  "composition": "hello",
+  "packages": [
+    {
+      "id": "example.services",
+      "version": "1.0.0",
+      "digest": "sha256:05d323e624bc7493e4ea27ecbf80903166d9493e4ee3a12aa6bdd84feebff1f6"
+    },
+    {
+      "id": "example.workflow",
+      "version": "1.0.0",
+      "digest": "sha256:9d34bc3d6b68e9b53e732b72a3863377c726a5ed9a6cd7e3c5d95b9c39ddfe1b"
+    }
+  ],
+  "instances": {
+    "a": {
+      "plugin": "example.workflow",
+      "bindings": {
+        "helper": "b",
+        "next": "c"
+      }
+    },
+    "b": {
+      "plugin": "example.services",
+      "config": {
+        "prefix": "B"
+      }
+    },
+    "c": {
+      "plugin": "example.services"
+    }
+  },
+  "entry": {
+    "instance": "a",
+    "method": "run"
+  }
+}

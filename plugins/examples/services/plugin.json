@@ -1,0 +1,1 @@
+{"id":"example.services","version":"1.0.0","kernel_api":1,"loader":{"adapter":"python","target":"plugin:apply"},"requires":{},"exports":["echo","infer","execute","slow","emit","fail","probe"],"config_schema":{"type":"object"}}

@@ -1,0 +1,16 @@
+kind: agentlab.profile.v1
+package_roots:
+  - ../plugins/examples/services
+composition:
+  kernel_api: 1
+  composition: custom-echo
+  instances:
+    quartz:
+      plugin: example.services
+      config:
+        prefix: An ordinary plugin, no Agent loop required
+  entry:
+    instance: quartz
+    method: echo
+payload:
+  task: Inspect a custom composition
